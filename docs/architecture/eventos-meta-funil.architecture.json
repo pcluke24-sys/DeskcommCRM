@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Eventos da Meta por etapa — configuração humana, entrega assíncrona",
+    "subtitle": "cada organização usa seu Dataset; a IA sugere e nunca confirma",
+    "output": "eventos-meta-funil.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "humano", "label": "Decisão humana" },
+    { "id": "produto", "label": "CRM" },
+    { "id": "dados", "label": "Dados isolados" },
+    { "id": "externo", "label": "Serviços externos" }
+  ],
+  "mainPath": ["mapa", "movimento", "eventlog", "worker", "meta"],
+  "nodes": [
+    {
+      "id": "mapa",
+      "lane": "humano",
+      "col": 1,
+      "type": "frontend",
+      "label": "Configuração por funil",
+      "sublabel": "etapa → nome livre de evento; marco antirretroativo"
+    },
+    {
+      "id": "analise",
+      "lane": "humano",
+      "col": 2,
+      "type": "frontend",
+      "label": "Sugestão de qualificação",
+      "sublabel": "confiança + evidências; não altera o lead"
+    },
+    {
+      "id": "movimento",
+      "lane": "humano",
+      "col": 3,
+      "type": "frontend",
+      "label": "Movimento do card",
+      "sublabel": "único gesto que confirma a etapa"
+    },
+    {
+      "id": "settings",
+      "lane": "produto",
+      "col": 1,
+      "type": "service",
+      "label": "updatePipelineConfig",
+      "sublabel": "schema estrito + audit"
+    },
+    {
+      "id": "sugestao",
+      "lane": "produto",
+      "col": 2,
+      "type": "service",
+      "label": "suggestQualification",
+      "sublabel": "somente leitura; filtros de organization_id"
+    },
+    {
+      "id": "eventlog",
+      "lane": "produto",
+      "col": 3,
+      "type": "service",
+      "label": "event_log",
+      "sublabel": "lead.created · lead.stage_changed · lead.won"
+    },
+    {
+      "id": "worker",
+      "lane": "produto",
+      "col": 4,
+      "type": "service",
+      "label": "conversoes.venda",
+      "sublabel": "mapa + ativação + retry + dedupe"
+    },
+    {
+      "id": "pipelines",
+      "lane": "dados",
+      "col": 1,
+      "type": "database",
+      "label": "crm_pipelines.settings",
+      "sublabel": "regras e critérios por funil"
+    },
+    {
+      "id": "ledger",
+      "lane": "dados",
+      "col": 4,
+      "type": "database",
+      "label": "conversion_events",
+      "sublabel": "evento único por lead e organização"
+    },
+    {
+      "id": "cofre",
+      "lane": "dados",
+      "col": 5,
+      "type": "database",
+      "label": "Cofre da organização",
+      "sublabel": "token e Dataset isolados"
+    },
+    {
+      "id": "ia",
+      "lane": "externo",
+      "col": 2,
+      "type": "external",
+      "label": "Provedor de IA",
+      "sublabel": "retorna sugestão estruturada"
+    },
+    {
+      "id": "meta",
+      "lane": "externo",
+      "col": 5,
+      "type": "external",
+      "label": "Meta Conversions API",
+      "sublabel": "WhatsApp ctwa_clid + eventos do funil"
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from": "mapa", "to": "settings", "label": "salvar regras e critérios" },
+    { "id": "e2", "from": "settings", "to": "pipelines", "label": "settings jsonb da organização" },
+    { "id": "e3", "from": "pipelines", "to": "analise", "label": "descrição da qualificação" },
+    { "id": "e4", "from": "analise", "to": "sugestao", "label": "solicitação explícita" },
+    { "id": "e5", "from": "sugestao", "to": "ia", "label": "critérios + conversa" },
+    { "id": "e6", "from": "ia", "to": "analise", "label": "sugestão, nunca confirmação" },
+    { "id": "e7", "from": "analise", "to": "movimento", "label": "humano decide" },
+    { "id": "e8", "from": "movimento", "to": "eventlog", "label": "evento canônico" },
+    { "id": "e9", "from": "eventlog", "to": "worker", "label": "drain assíncrono" },
+    { "id": "e10", "from": "pipelines", "to": "worker", "label": "mapeamento e marco de ativação" },
+    { "id": "e11", "from": "worker", "to": "ledger", "label": "estado e deduplicação" },
+    { "id": "e12", "from": "cofre", "to": "worker", "label": "credencial da mesma organização" },
+    { "id": "e13", "from": "worker", "to": "meta", "label": "envio com event_id estável" },
+    { "id": "e14", "from": "meta", "to": "ledger", "label": "sucesso ou falha rastreável" }
+  ]
+}

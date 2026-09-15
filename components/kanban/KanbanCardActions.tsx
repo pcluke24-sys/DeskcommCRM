@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { DotsThree, PencilSimple, Users } from "@/lib/ui/icons";
+import { DotsThree, PencilSimple, Sparkle, Users } from "@/lib/ui/icons";
 import { useWinLead, useEditLead } from "@/hooks/kanban/useUpdateLead";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useAssignableAgents } from "@/hooks/kanban/useAssignableAgents";
@@ -20,6 +20,7 @@ import { usePermission } from "@/hooks/auth/AuthProvider";
 import { LoseLeadDialog } from "./LoseLeadDialog";
 import { EditLeadDialog } from "./EditLeadDialog";
 import type { Lead } from "@/lib/types/leads";
+import { LeadQualificationDialog } from "./LeadQualificationDialog";
 
 interface KanbanCardActionsProps {
   lead: Lead;
@@ -30,6 +31,7 @@ export function KanbanCardActions({ lead, pipelineId }: KanbanCardActionsProps) 
   const t = useT();
   const [loseOpen, setLoseOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [qualificationOpen, setQualificationOpen] = useState(false);
   const winMutation = useWinLead(pipelineId);
   const editMutation = useEditLead(pipelineId);
   // spec 13 §4: escrita no funil é agent+ — viewer não reatribui (a rota
@@ -72,16 +74,16 @@ export function KanbanCardActions({ lead, pipelineId }: KanbanCardActionsProps) 
             <DotsThree size={16} weight="bold" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
           <DropdownMenuItem
             onSelect={() => {
               setEditOpen(true);
             }}
           >
             <PencilSimple size={14} className="mr-2" /> {t("Editar")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setQualificationOpen(true)}>
+            <Sparkle size={14} className="mr-2" /> {t("Analisar qualificação com IA")}
           </DropdownMenuItem>
           {canAssign && (
             <DropdownMenuSub>
@@ -155,6 +157,11 @@ export function KanbanCardActions({ lead, pipelineId }: KanbanCardActionsProps) 
         onOpenChange={setEditOpen}
         lead={lead}
         pipelineId={pipelineId}
+      />
+      <LeadQualificationDialog
+        open={qualificationOpen}
+        onOpenChange={setQualificationOpen}
+        leadId={lead.id}
       />
     </>
   );

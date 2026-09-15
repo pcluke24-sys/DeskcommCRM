@@ -151,9 +151,7 @@ export const customFieldSchema = z.object({
     "url",
   ]),
   required: z.boolean().optional(),
-  options: z
-    .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
-    .optional(),
+  options: z.array(z.object({ value: z.string().min(1), label: z.string().min(1) })).optional(),
 });
 export type CustomFieldDef = z.infer<typeof customFieldSchema>;
 
@@ -168,6 +166,26 @@ export const pipelineConfigPatchSchema = z.object({
     .optional(),
   fields: z.array(customFieldSchema).max(50).optional(),
   lost_reasons: z.array(z.string().min(1).max(80)).max(50).optional(),
+  meta_conversion_rules: z
+    .record(
+      z.string().uuid(),
+      z.object({
+        event_name: z
+          .string()
+          .trim()
+          .min(1)
+          .max(40)
+          .regex(/^[A-Za-z][A-Za-z0-9_]*$/, "Use letras, numeros e underscore"),
+        requires_value: z.boolean().default(false),
+      }),
+    )
+    .optional(),
+  qualification_policy: z
+    .object({
+      qualified_description: z.string().trim().max(4000),
+      disqualified_description: z.string().trim().max(4000),
+    })
+    .optional(),
 });
 export type PipelineConfigPatch = z.infer<typeof pipelineConfigPatchSchema>;
 

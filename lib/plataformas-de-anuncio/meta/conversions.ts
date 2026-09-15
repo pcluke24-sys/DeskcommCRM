@@ -108,10 +108,14 @@ async function enviar(
         action_source: "business_messaging",
         messaging_channel: "whatsapp",
         user_data: userData,
-        custom_data: {
-          value: conversao.valorCentavos / 100,
-          currency: conversao.moeda.toUpperCase(),
-        },
+        ...(conversao.valorCentavos !== null && conversao.moeda
+          ? {
+              custom_data: {
+                value: conversao.valorCentavos / 100,
+                currency: conversao.moeda.toUpperCase(),
+              },
+            }
+          : {}),
       },
     ],
   };

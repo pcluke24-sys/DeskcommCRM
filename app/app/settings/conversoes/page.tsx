@@ -44,6 +44,7 @@ import { formatCentsBRL } from "@/lib/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { FormularioDeConversoes } from "./_form";
+import { EventosDoFunil, type FunilParaConversoes } from "./_funnel-events";
 
 export const metadata = { title: "Conversões" };
 export const dynamic = "force-dynamic";
@@ -57,13 +58,43 @@ export default async function ConversoesPage() {
   }
 
   const admin = createAdminClient();
-  const [estado, pendencias, enviadas] = await Promise.all([
+  const [estado, pendencias, enviadas, pipelines] = await Promise.all([
     lerEstadoDaConexao(admin, activeOrg.orgId),
     lerPendencias(admin, activeOrg.orgId),
     contaEnviadas(admin, activeOrg.orgId),
+    admin
+      .from("crm_pipelines")
+      .select("id, name, settings, crm_stages(id, name, position, is_archived)")
+      .eq("organization_id", activeOrg.orgId)
+      .eq("is_archived", false)
+      .order("position"),
   ]);
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
+  const funis: FunilParaConversoes[] = (pipelines.data ?? []).map((linha) => {
+    const settings = (linha.settings as Record<string, unknown> | null) ?? {};
+    const policy =
+      settings.qualification_policy && typeof settings.qualification_policy === "object"
+        ? (settings.qualification_policy as Record<string, unknown>)
+        : {};
+    const rules =
+      settings.meta_conversion_rules && typeof settings.meta_conversion_rules === "object"
+        ? (settings.meta_conversion_rules as FunilParaConversoes["rules"])
+        : {};
+    return {
+      id: linha.id,
+      name: linha.name,
+      stages: (linha.crm_stages ?? [])
+        .filter((stage) => !stage.is_archived)
+        .map((stage) => ({ id: stage.id, name: stage.name, position: Number(stage.position) }))
+        .sort((a, b) => a.position - b.position),
+      rules,
+      qualifiedDescription:
+        typeof policy.qualified_description === "string" ? policy.qualified_description : "",
+      disqualifiedDescription:
+        typeof policy.disqualified_description === "string" ? policy.disqualified_description : "",
+    };
+  });
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
@@ -71,28 +102,34 @@ export default async function ConversoesPage() {
         <h1 className="text-2xl font-semibold tracking-tight">{t("Conversões")}</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {t(
-            "Quando um negócio que veio de anúncio é marcado como ganho, o valor da venda volta para a plataforma que trouxe o cliente. É esse retorno que ensina o anúncio a procurar mais gente parecida com quem comprou.",
+            "Envie para a Meta os avanços importantes do funil e, quando houver uma compra, também o valor da venda. Esse retorno ajuda a plataforma a otimizar as campanhas com base na qualidade real dos contatos.",
           )}
         </p>
       </header>
 
       {estado.conectada && !estado.habilitada && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-          {t("O envio está pausado. As vendas continuam sendo registradas aqui, mas não vão para a plataforma enquanto isto estiver desligado.")}
+          {t(
+            "O envio está pausado. Os eventos continuam sendo registrados aqui, mas não vão para a plataforma enquanto isto estiver desligado.",
+          )}
         </div>
       )}
 
       {estado.testEventCode && (
         <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-4 text-sm">
-          {t("Modo de teste ligado: as vendas vão marcadas como teste e não contam para a otimização. Apague o código de teste quando terminar de conferir.")}
+          {t(
+            "Modo de teste ligado: os eventos vão marcados como teste e não contam para a otimização. Apague o código de teste quando terminar de conferir.",
+          )}
         </div>
       )}
 
       <FormularioDeConversoes estado={estado} idioma={idioma} />
 
+      <EventosDoFunil funis={funis} idioma={idioma} />
+
       <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-semibold">{t("Vendas que não foram reportadas")}</h2>
+          <h2 className="text-lg font-semibold">{t("Eventos que não foram reportados")}</h2>
           <span className="text-sm text-muted-foreground">
             {enviadas} {t("reportadas com sucesso")}
           </span>
@@ -103,10 +140,12 @@ export default async function ConversoesPage() {
             {/*
               Ausência de pendência tem DUAS causas com significados opostos, e
               dizer só "tudo certo" esconderia a segunda: ou nada falhou, ou nunca
-              fechou uma venda vinda de anúncio. Quem acabou de conectar precisa
+              ocorreu um evento atribuível vindo de anúncio. Quem acabou de conectar precisa
               saber que a lista vazia ainda não prova que funciona.
             */}
-            {t("Nenhuma pendência. Ou tudo que veio de anúncio foi reportado, ou ainda não fechou nenhuma venda com origem em anúncio.")}
+            {t(
+              "Nenhuma pendência. Ou tudo que veio de anúncio foi reportado, ou ainda não ocorreu nenhum evento com origem em anúncio.",
+            )}
           </p>
         ) : (
           <div className="overflow-x-auto rounded-md border">
@@ -123,7 +162,10 @@ export default async function ConversoesPage() {
                 {pendencias.map((p) => (
                   <tr key={p.leadId} className="border-t align-top">
                     <td className="p-3">
-                      <a className="underline underline-offset-2" href={`/app/kanban?lead=${p.leadId}`}>
+                      <a
+                        className="underline underline-offset-2"
+                        href={`/app/kanban?lead=${p.leadId}`}
+                      >
                         {p.tituloDoLead ?? t("(sem título)")}
                       </a>
                     </td>
@@ -133,7 +175,9 @@ export default async function ConversoesPage() {
                     <td className="p-3">
                       <span>{t(MOTIVO_LEGIVEL[p.motivo ?? ""] ?? p.motivo ?? "—")}</span>
                       {p.detalhe && (
-                        <span className="mt-1 block text-xs text-muted-foreground">{p.detalhe}</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {p.detalhe}
+                        </span>
                       )}
                     </td>
                     <td className="p-3 whitespace-nowrap text-muted-foreground">

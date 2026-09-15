@@ -44,8 +44,8 @@
  */
 export type PlataformaDeAnuncio = "meta_ads" | "google_ads";
 
-/** Só `Purchase` hoje. `Lead` é a Fase 2 e entra quando `lead.created` for consumido. */
-export type NomeDoEvento = "Purchase";
+/** Nome padrao ou personalizado aceito pela plataforma (validado na configuracao). */
+export type NomeDoEvento = string;
 
 /**
  * Uma conversão pronta para sair — no formato da CASA, não no da plataforma.
@@ -76,8 +76,8 @@ export interface ConversaoOffline {
   cliqueDeOrigem: string;
   /** E.164 sem `+`, ainda EM CLARO: o hash é responsabilidade do transporte. */
   telefone: string | null;
-  valorCentavos: number;
-  moeda: string;
+  valorCentavos: number | null;
+  moeda: string | null;
 }
 
 /**
@@ -118,10 +118,7 @@ export interface CredencialDeConversao {
  */
 export interface TransporteDeConversao {
   plataforma: PlataformaDeAnuncio;
-  enviar(
-    credencial: CredencialDeConversao,
-    conversao: ConversaoOffline,
-  ): Promise<ResultadoDeEnvio>;
+  enviar(credencial: CredencialDeConversao, conversao: ConversaoOffline): Promise<ResultadoDeEnvio>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -193,8 +190,7 @@ export type FalhaDeLeitura =
   | "transitorio";
 
 export type ResultadoDeLeitura<T> =
-  | { ok: true; dados: T }
-  | { ok: false; falha: FalhaDeLeitura; detalhe: string };
+  { ok: true; dados: T } | { ok: false; falha: FalhaDeLeitura; detalhe: string };
 
 /**
  * O que a tela mostra de "Resultado", já resolvido.

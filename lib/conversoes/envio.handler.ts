@@ -49,7 +49,35 @@ import { lerAtribuicao } from "./leitura-da-atribuicao";
 import { jaFoiEnviada, registraEnvio } from "./registro-de-envio";
 
 const CONSUMER_KEY = "conversoes.venda";
-const EVENTO: NomeDoEvento = "Purchase";
+const EVENTO_DE_VENDA: NomeDoEvento = "Purchase";
+
+type RegraDeConversao = { event_name: string; requires_value?: boolean };
+
+function configuracaoDoFunil(settings: unknown): {
+  regras: Record<string, RegraDeConversao>;
+  ativadaEm: Date | null;
+} {
+  const s = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
+  const regrasCruas =
+    s.meta_conversion_rules && typeof s.meta_conversion_rules === "object"
+      ? (s.meta_conversion_rules as Record<string, unknown>)
+      : {};
+  const regras: Record<string, RegraDeConversao> = {};
+  for (const [stageId, valor] of Object.entries(regrasCruas)) {
+    if (!valor || typeof valor !== "object") continue;
+    const regra = valor as Record<string, unknown>;
+    if (typeof regra.event_name !== "string" || !regra.event_name.trim()) continue;
+    regras[stageId] = {
+      event_name: regra.event_name.trim(),
+      requires_value: regra.requires_value === true,
+    };
+  }
+  const data =
+    typeof s.meta_conversion_activated_at === "string"
+      ? new Date(s.meta_conversion_activated_at)
+      : null;
+  return { regras, ativadaEm: data && !Number.isNaN(data.getTime()) ? data : null };
+}
 
 /** Backoff do transitório. O drain reagenda sem contar tentativa. */
 const ESPERA_PADRAO_MS = 5 * 60 * 1000;
@@ -68,7 +96,7 @@ async function handle(row: EventRow): Promise<HandlerResult> {
   // ⚠️ Filtro de organização junto do id: o client é service-role e bypassa RLS.
   const { data, error } = await admin
     .from("crm_leads")
-    .select("id, status, value_cents, currency, closed_at, contact_id")
+    .select("id, status, value_cents, currency, closed_at, contact_id, pipeline_id, stage_id")
     .eq("id", row.entity_id)
     .eq("organization_id", row.organization_id)
     .maybeSingle();
@@ -92,14 +120,44 @@ async function handle(row: EventRow): Promise<HandlerResult> {
     currency: string | null;
     closed_at: string | null;
     contact_id: string | null;
+    pipeline_id: string;
+    stage_id: string;
   };
 
-  // O filtro que faz `lead.stage_changed` valer a pena escutar: a grande maioria
-  // das mudanças de etapa não é fechamento, e sai por aqui sem tocar no banco de
-  // novo nem sujar o livro-razão.
-  if (lead.status !== "won") return ok("skipped", "nao_e_ganho");
+  const { data: pipeline, error: pipelineError } = await admin
+    .from("crm_pipelines")
+    .select("settings")
+    .eq("id", lead.pipeline_id)
+    .eq("organization_id", row.organization_id)
+    .maybeSingle();
+  if (pipelineError) {
+    return {
+      consumer_key: CONSUMER_KEY,
+      status: "retry",
+      retry_at: new Date(Date.now() + ESPERA_PADRAO_MS).toISOString(),
+      detail: `leitura do funil falhou: ${pipelineError.message}`,
+    };
+  }
 
-  if (await jaFoiEnviada(admin, row.organization_id, lead.id, EVENTO)) {
+  const config = configuracaoDoFunil((pipeline as { settings?: unknown } | null)?.settings);
+  const payload =
+    row.payload && typeof row.payload === "object" ? (row.payload as Record<string, unknown>) : {};
+  const stageId = typeof payload.to_stage_id === "string" ? payload.to_stage_id : lead.stage_id;
+  const regra = config.regras[stageId];
+  const ocorridoEm = new Date(row.created_at ?? Date.now());
+
+  // Mapeamentos novos nunca olham para eventos anteriores ao clique em salvar.
+  if (regra && config.ativadaEm && ocorridoEm < config.ativadaEm) {
+    return ok("skipped", "anterior_a_ativacao");
+  }
+
+  // Preserva o comportamento anterior: ganhar continua enviando Purchase mesmo
+  // em funis que ainda nao configuraram o novo mapa.
+  const evento: NomeDoEvento | null =
+    regra?.event_name ?? (lead.status === "won" ? EVENTO_DE_VENDA : null);
+  if (!evento) return ok("skipped", "etapa_sem_evento");
+
+  if (await jaFoiEnviada(admin, row.organization_id, lead.id, evento)) {
     return ok("skipped", "ja_enviada");
   }
 
@@ -117,10 +175,10 @@ async function handle(row: EventRow): Promise<HandlerResult> {
       organizationId: row.organization_id,
       leadId: lead.id,
       plataforma,
-      evento: EVENTO,
+      evento,
       status,
       motivo,
-      eventoId: `${lead.id}:${EVENTO}`,
+      eventoId: `${lead.id}:${evento}`,
       valorCentavos: lead.value_cents,
       moeda: lead.currency,
       detalhe: detalhe ?? null,
@@ -138,7 +196,8 @@ async function handle(row: EventRow): Promise<HandlerResult> {
   // nullable e nada obriga a preenchê-lo no fechamento (baseline.sql:1452), então
   // esta é a pendência MAIS COMUM — e a razão de a tela existir. Mandar `0` para
   // "resolver" seria aceito e ensinaria ao otimizador que a venda não vale nada.
-  if (lead.value_cents === null || lead.value_cents <= 0) {
+  const exigeValor = evento === "Purchase" || regra?.requires_value === true;
+  if (exigeValor && (lead.value_cents === null || lead.value_cents <= 0)) {
     await registra("skipped", "sem_valor");
     return ok("skipped", "sem_valor");
   }
@@ -152,19 +211,20 @@ async function handle(row: EventRow): Promise<HandlerResult> {
   const conversao: ConversaoOffline = {
     organizationId: row.organization_id,
     leadId: lead.id,
-    evento: EVENTO,
-    eventoId: `${lead.id}:${EVENTO}`,
+    evento,
+    eventoId: `${lead.id}:${evento}`,
     // `closed_at` é escrito pelo trigger junto com o `status`, então em won ele
     // existe. O fallback é para a linha antiga de um banco que fechou por outro
     // caminho — e cair em `created_at` do evento é melhor que em `now()`, que
     // fingiria que a venda é de hoje.
-    ocorridoEm: new Date(lead.closed_at ?? row.created_at ?? Date.now()),
+    ocorridoEm:
+      evento === "Purchase" ? new Date(lead.closed_at ?? row.created_at ?? Date.now()) : ocorridoEm,
     cliqueDeOrigem,
     telefone,
     // A coluna tem `DEFAULT 'BRL'` e um CHECK de ISO-4217; o fallback só cobre a
     // linha que teve a moeda apagada à mão.
-    moeda: lead.currency ?? "BRL",
-    valorCentavos: lead.value_cents,
+    moeda: exigeValor ? (lead.currency ?? "BRL") : null,
+    valorCentavos: exigeValor ? lead.value_cents : null,
   };
 
   const resultado = await transporte.enviar(credencial.credencial, conversao);
@@ -194,6 +254,8 @@ export const conversaoDeVendaHandler: EventHandler = {
   key: CONSUMER_KEY,
   // As duas portas. Ver o cabeçalho: `lead.stage_changed` cobre o arrasto no
   // kanban E o mover em lote, e o `status` do payload não é confiável em nenhum.
-  events: ["lead.won", "lead.stage_changed"],
+  events: ["lead.created", "lead.won", "lead.stage_changed"],
   handle,
 };
+
+export const INTERNOS = { configuracaoDoFunil } as const;
