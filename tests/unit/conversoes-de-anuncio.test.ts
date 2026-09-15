@@ -133,7 +133,7 @@ describe("as duas portas do fechamento", () => {
     const r = await conversaoDeVendaHandler.handle(evento("lead.stage_changed"));
 
     expect(r.status).toBe("skipped");
-    expect(r.detail).toBe("nao_e_ganho");
+    expect(r.detail).toBe("etapa_sem_evento");
     // A maioria esmagadora das mudanças de etapa cai aqui: não pode nem falar
     // com a rede nem sujar o livro-razão.
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -203,21 +203,24 @@ describe("o que vira pendência visível na tela", () => {
     expect(upserts.at(-1)?.valores).toMatchObject({ status: "skipped", reason: "sem_valor" });
   });
 
-  it("lead orgânico NÃO vira linha no livro-razão", async () => {
-    // Não havia nada a reportar. Gravar aqui encheria a tela de ruído e faria
-    // ninguém ler a lista de pendências duas vezes. O veredito ainda volta no
-    // HandlerResult, que o drain persiste no event_log.
+  it("lead orgânico com telefone é enviado à Meta mesmo sem clique", async () => {
     vi.mocked(createAdminClient).mockReturnValue(
       fakeAdmin({
         crm_leads: leadGanho,
         contacts: { phone_number: "+5511988887777", source_metadata: {} },
+        ad_platform_connections: conexaoAtiva,
       }) as never,
     );
 
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
     const r = await conversaoDeVendaHandler.handle(evento("lead.won"));
 
-    expect(r.detail).toBe("sem_atribuicao");
-    expect(upserts).toHaveLength(0);
+    expect(r.status).toBe("ok");
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const corpo = JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body));
+    expect(corpo.data[0].action_source).toBe("system_generated");
+    expect(corpo.data[0].user_data).not.toHaveProperty("ctwa_clid");
+    expect(upserts.at(-1)?.valores.status).toBe("sent");
   });
 
   it("falta de conexão vira pendência, não silêncio", async () => {

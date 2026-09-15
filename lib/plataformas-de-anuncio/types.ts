@@ -72,8 +72,8 @@ export interface ConversaoOffline {
    * um backlog de drain virar atribuição errada em vez de erro visível.
    */
   ocorridoEm: Date;
-  /** O clique que originou a conversa — `ad_source_id` do contato (0164). */
-  cliqueDeOrigem: string;
+  /** O clique que originou a conversa, quando houver — `ad_source_id` do contato (0164). */
+  cliqueDeOrigem: string | null;
   /** E.164 sem `+`, ainda EM CLARO: o hash é responsabilidade do transporte. */
   telefone: string | null;
   valorCentavos: number | null;

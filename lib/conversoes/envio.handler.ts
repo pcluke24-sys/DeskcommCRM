@@ -33,12 +33,9 @@
  *
  * ─── Quando uma linha vai para o livro-razão ────────────────────────────────
  *
- * Só quando HÁ atribuição de anúncio. Um lead orgânico que fecha não é uma
- * conversão que deixou de ser reportada — não havia nada a reportar. Gravar
- * `sem_atribuicao` para cada venda orgânica encheria a tabela e faria a tela,
- * que existe para mostrar pendência, mostrar sobretudo ruído. O veredito ainda
- * é registrado: ele volta no `HandlerResult` e o drain o persiste no `event_log`
- * (invariante 4 — não-aplicação é auditável, não invisível).
+ * Enviamos tanto conversões atribuídas a anúncio quanto orgânicas/offline. O
+ * `ctwa_clid`, quando existe, melhora a atribuição; não é porta de entrada. O
+ * mínimo para match sem clique é um contato com telefone utilizável.
  */
 import type { EventHandler, EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
 import { lerCredencial } from "@/lib/plataformas-de-anuncio/credenciais";

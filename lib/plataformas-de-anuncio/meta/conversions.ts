@@ -20,9 +20,9 @@
  *    plataforma, não da nossa feature.
  *
  * 3. Identidade. Para conversão vinda de anúncio clique-para-WhatsApp, o
- *    `ctwa_clid` é o que liga a venda ao clique — é ele que carrega a atribuição,
- *    e o telefone hasheado só reforça. Sem o clique não há o que reportar, e é
- *    isso que o chamador chama de `sem_atribuicao`.
+ *    `ctwa_clid` liga a venda ao clique e o telefone hasheado reforça o match.
+ *    Para conversão orgânica/offline, o telefone hasheado é a identidade e o
+ *    evento é reportado sem inventar atribuição a um anúncio específico.
  *
  * ─── Por que `business_messaging` e não `website` ───────────────────────────
  *
@@ -90,9 +90,8 @@ async function enviar(
     };
   }
 
-  const userData: Record<string, unknown> = {
-    ctwa_clid: conversao.cliqueDeOrigem,
-  };
+  const userData: Record<string, unknown> = {};
+  if (conversao.cliqueDeOrigem) userData.ctwa_clid = conversao.cliqueDeOrigem;
   // Array de propósito: o formato aceita múltiplos valores por campo, e mandar
   // string crua onde ele espera lista é aceito com aviso e ignorado no match.
   if (conversao.telefone) userData.ph = [hash(conversao.telefone)];
@@ -105,8 +104,8 @@ async function enviar(
         // futuro, e a resposta é 200 — some sem erro.
         event_time: Math.floor(conversao.ocorridoEm.getTime() / 1000),
         event_id: conversao.eventoId,
-        action_source: "business_messaging",
-        messaging_channel: "whatsapp",
+        action_source: conversao.cliqueDeOrigem ? "business_messaging" : "system_generated",
+        ...(conversao.cliqueDeOrigem ? { messaging_channel: "whatsapp" } : {}),
         user_data: userData,
         ...(conversao.valorCentavos !== null && conversao.moeda
           ? {

@@ -18,14 +18,14 @@ import type { PlataformaDeAnuncio } from "@/lib/plataformas-de-anuncio/types";
 
 export interface AtribuicaoParaEnvio {
   plataforma: PlataformaDeAnuncio;
-  /** `ad_source_id` — o `ctwa_clid`, o clique que abriu a conversa. */
-  cliqueDeOrigem: string;
-  telefone: string | null;
+  /** `ad_source_id` — o `ctwa_clid`, quando o clique que abriu a conversa existe. */
+  cliqueDeOrigem: string | null;
+  telefone: string;
 }
 
 export type LeituraDeAtribuicao =
   | { temAtribuicao: true; atribuicao: AtribuicaoParaEnvio }
-  | { temAtribuicao: false; motivo: "sem_contato" | "sem_atribuicao" | "plataforma_desconhecida" };
+  | { temAtribuicao: false; motivo: "sem_contato" | "sem_telefone" | "plataforma_desconhecida" };
 
 /**
  * ⚠️ FILTRA `organization_id` MESMO TENDO O ID DO CONTATO. O chamador é um
@@ -51,32 +51,30 @@ export async function lerAtribuicao(
   if (!data) return { temAtribuicao: false, motivo: "sem_contato" };
 
   const linha = data as { phone_number: string | null; source_metadata: unknown };
+  const telefone = linha.phone_number ? linha.phone_number.replace(/\D/g, "") : "";
+  if (!telefone) return { temAtribuicao: false, motivo: "sem_telefone" };
+
   const meta =
     linha.source_metadata && typeof linha.source_metadata === "object"
       ? (linha.source_metadata as Record<string, unknown>)
       : {};
 
   const clique = typeof meta.ad_source_id === "string" ? meta.ad_source_id.trim() : "";
-  // Sem o clique não há atribuição utilizável: é ele que liga a venda ao anúncio.
-  // Ter `ad_platform` sem `ad_source_id` acontece quando o payload trouxe o
-  // referral sem o identificador — a 0164 grava os dois como vieram.
-  if (!clique) return { temAtribuicao: false, motivo: "sem_atribuicao" };
-
-  // Plataforma que não está no vocabulário significa dado gravado por uma versão
-  // futura (ou corrompido). Recusar explicitamente é melhor que assumir a Meta e
-  // reportar a venda na conta errada.
-  if (!ehPlataformaConhecida(meta.ad_platform)) {
+  // Se há clique, preservamos a plataforma que o originou. Sem clique, trata-se
+  // de conversão offline/CRM: o telefone identifica a pessoa e a conexão Meta
+  // da própria organização define o destino, sem inventar atribuição ao anúncio.
+  if (clique && !ehPlataformaConhecida(meta.ad_platform)) {
     return { temAtribuicao: false, motivo: "plataforma_desconhecida" };
   }
 
   return {
     temAtribuicao: true,
     atribuicao: {
-      plataforma: meta.ad_platform,
-      cliqueDeOrigem: clique,
+      plataforma: clique ? meta.ad_platform as PlataformaDeAnuncio : "meta_ads",
+      cliqueDeOrigem: clique || null,
       // Só dígitos: a plataforma exige E.164 sem `+` nem separadores ANTES do
       // hash. Normalizar depois do hash seria tarde — o hash já estaria errado.
-      telefone: linha.phone_number ? linha.phone_number.replace(/\D/g, "") || null : null,
+      telefone,
     },
   };
 }
