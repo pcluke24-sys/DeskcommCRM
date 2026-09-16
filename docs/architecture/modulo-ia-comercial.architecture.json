@@ -1,0 +1,16 @@
+{
+  "name": "Contratação de IA por organização",
+  "nodes": [
+    { "id": "platform", "label": "Administrador da plataforma" },
+    { "id": "flag", "label": "organizations.settings.ai_module_enabled" },
+    { "id": "navigation", "label": "Sidebar, busca e onboarding" },
+    { "id": "runtime", "label": "resolveOrgLlmConfig: veto terminal antes do provedor" },
+    { "id": "audit", "label": "api_audit_log: tenant.ai_module_updated" }
+  ],
+  "edges": [
+    { "from": "platform", "to": "flag" },
+    { "from": "flag", "to": "navigation" },
+    { "from": "flag", "to": "runtime" },
+    { "from": "platform", "to": "audit" }
+  ]
+}

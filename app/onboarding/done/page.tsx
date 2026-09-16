@@ -13,13 +13,16 @@ export default async function DonePage() {
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/login");
 
-  const { state } = await loadOnboardingState(activeOrg.orgId);
+  const { state, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId);
 
   // O resumo sai da MESMA fonte que decidiu a ordem e desenhou o indicador.
   // Antes era uma terceira lista, fixa, e por isso ela listava "Loja Nuvemshop
   // (pulado)" em instalações que nunca ofereceram esse passo — o wizard
   // acusando a pessoa de não fazer o que ninguém lhe pediu.
-  const itens = resumoDoOnboarding(state, { lojaLigada: env.NUVEMSHOP_ENABLED });
+  const itens = resumoDoOnboarding(state, {
+    lojaLigada: env.NUVEMSHOP_ENABLED,
+    iaLiberada: aiModuleEnabled,
+  });
 
   return <DoneClient itens={itens} pecas={oQueMaisExiste()} />;
 }

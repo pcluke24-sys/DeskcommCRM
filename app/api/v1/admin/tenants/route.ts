@@ -214,9 +214,22 @@ export async function POST(req: NextRequest) {
       .select("settings")
       .eq("id", org.id)
       .maybeSingle();
-    await admin.from("organizations").update({
-      settings: { ...((createdSettings?.settings as Record<string, unknown> | null) ?? {}), ai_module_enabled: request.ai_module_enabled },
-    }).eq("id", org.id);
+    const { error: moduleUpdateError } = await admin
+      .from("organizations")
+      .update({
+        settings: {
+          ...((createdSettings?.settings as Record<string, unknown> | null) ?? {}),
+          ai_module_enabled: request.ai_module_enabled,
+        },
+      })
+      .eq("id", org.id);
+    if (moduleUpdateError)
+      return fail(
+        "internal_error",
+        "A organização foi criada, mas não foi possível salvar a contratação de IA. Confira a organização antes de enviar o convite.",
+        500,
+        { requestId },
+      );
     await audit({
       action: "tenant.created_by_platform_admin",
       actorUserId: adminCtx.user.id,

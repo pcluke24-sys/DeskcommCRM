@@ -20,9 +20,12 @@ export default async function OnboardingIndex() {
   // é a tela que CRIA a organização que falta.
   if (!activeOrg) redirect("/get-started");
 
-  const { state, onboardedAt } = await loadOnboardingState(activeOrg.orgId);
+  const { state, onboardedAt, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId);
   if (onboardedAt) redirect("/app/inbox");
 
-  const passo = proximoPasso(state, { lojaLigada: env.NUVEMSHOP_ENABLED });
+  const passo = proximoPasso(state, {
+    lojaLigada: env.NUVEMSHOP_ENABLED,
+    iaLiberada: aiModuleEnabled,
+  });
   redirect(passo ? `/onboarding/${passo.segmento}` : "/onboarding/done");
 }

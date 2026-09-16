@@ -37,6 +37,7 @@ export interface PassoDoOnboarding {
 export interface ContextoDoPasso {
   /** A integração de loja está ligada nesta instalação? */
   lojaLigada: boolean;
+  iaLiberada?: boolean;
 }
 
 /** Um passo marcado no estado — com ou sem `skipped`. */
@@ -75,7 +76,7 @@ export const PASSOS: readonly PassoDoOnboarding[] = [
   {
     segmento: "setup-ai",
     rotulo: "Treinar",
-    existe: () => true,
+    existe: (ctx) => ctx.iaLiberada !== false,
     cumprido: (s) => marcado(s.ai),
     pulado: (s) => foiPulado(s.ai),
   },
@@ -96,7 +97,7 @@ export const PASSOS: readonly PassoDoOnboarding[] = [
     // sistema" em "contratei alguém" — e é onde o erro aparece antes do
     // primeiro cliente real, não depois.
     rotulo: "Ver ele atender",
-    existe: () => true,
+    existe: (ctx) => ctx.iaLiberada !== false,
     cumprido: (s) => marcado(s.teste),
     pulado: (s) => foiPulado(s.teste),
   },
@@ -137,10 +138,7 @@ export interface ItemDoResumo {
  * um passo que não existe nesta instalação não vira linha, muito menos linha
  * marcada como pulada.
  */
-export function resumoDoOnboarding(
-  state: OnboardingState,
-  ctx: ContextoDoPasso,
-): ItemDoResumo[] {
+export function resumoDoOnboarding(state: OnboardingState, ctx: ContextoDoPasso): ItemDoResumo[] {
   return passosVisiveis(ctx).map((p) => ({
     segmento: p.segmento,
     rotulo: p.rotulo,

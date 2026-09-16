@@ -15,18 +15,19 @@
  * A config é lida do DB A CADA chamada (resolveOrgLlmConfig) — trocar modelo/
  * provider/teto é UPDATE na config, sem restart nem deploy.
  */
-import type pg from 'pg';
-import { z } from 'zod';
+import type pg from "pg";
+import { moduloIaEstaLiberado, ModuloIaBloqueadoError } from "@/lib/ai/modulo";
+import { z } from "zod";
 
-import { byteaToBuffer, decryptKey } from '@/lib/crypto/aes_gcm';
+import { byteaToBuffer, decryptKey } from "@/lib/crypto/aes_gcm";
 import {
   LIMIAR_PADRAO_PCT,
   normalizarChaveDeOrcamento,
   normalizarModoDeOrcamento,
   type ChaveDeOrcamento,
   type ModoDeOrcamento,
-} from './orcamento';
-import type { CacheTtl } from './stable-prefix';
+} from "./orcamento";
+import type { CacheTtl } from "./stable-prefix";
 
 /** Config da camada LLM montada do env validado (padrão crmEdgeConfigFromEnv). */
 export interface LlmEdgeConfig {
@@ -86,8 +87,8 @@ export function llmEdgeConfigFromEnv(env: {
   LLM_CACHE_TTL?: string;
   AI_BUDGET_ENFORCEMENT?: string;
 }): LlmEdgeConfig {
-  const ttl = env.LLM_CACHE_TTL ?? '1h';
-  if (ttl !== '5m' && ttl !== '1h') {
+  const ttl = env.LLM_CACHE_TTL ?? "1h";
+  if (ttl !== "5m" && ttl !== "1h") {
     throw new Error("LLM_CACHE_TTL inválido — use '5m' ou '1h' (default 1h)");
   }
   return {
@@ -105,10 +106,10 @@ export function llmEdgeConfigFromEnv(env: {
 
 /** Org sem credencial LLM utilizável — erro tipado, mensagem sem valores (credencial fora). */
 export class LlmNotConfiguredError extends Error {
-  override readonly name = 'llm_not_configured';
+  override readonly name = "llm_not_configured";
   constructor() {
     super(
-      'org sem credencial LLM utilizável — cadastre uma chave BYOK ativa/validada em ai_provider_credentials ou defina ANTHROPIC_API_KEY / OPENAI_API_KEY (fallback de plataforma, conforme o provider do modelo)',
+      "org sem credencial LLM utilizável — cadastre uma chave BYOK ativa/validada em ai_provider_credentials ou defina ANTHROPIC_API_KEY / OPENAI_API_KEY (fallback de plataforma, conforme o provider do modelo)",
     );
   }
 }
@@ -163,14 +164,14 @@ export interface OrgLlmConfig {
 // que continua sendo jsonb livre.
 const llmSettingsSchema = z
   .object({
-    provider: z.string().min(1).catch('anthropic'),
+    provider: z.string().min(1).catch("anthropic"),
     default_model: z.string().min(1).nullable().catch(null),
     params: z.record(z.string(), z.unknown()).catch({}),
     enabled_models: z.array(z.string()).catch([]),
   })
   .passthrough()
   .catch({
-    provider: 'anthropic',
+    provider: "anthropic",
     default_model: null,
     params: {},
     enabled_models: [],
@@ -189,6 +190,7 @@ const llmSettingsSchema = z
  */
 const SQL_CONFIG_COM_ORCAMENTO = `
   select o.settings->'llm'            as llm,
+         o.settings                  as module_settings,
          b.monthly_limit_cents        as teto,
          b.enforcement_mode           as modo,
          b.enforcement_effective_at   as efetivo_em,
@@ -198,9 +200,10 @@ const SQL_CONFIG_COM_ORCAMENTO = `
    where o.id = $1`;
 
 /** A query de antes da 0159 — a rede quando o schema do clone está atrasado. */
-const SQL_CONFIG_LEGADO = `select settings->'llm' as llm from organizations where id = $1`;
+const SQL_CONFIG_LEGADO = `select settings->'llm' as llm, settings as module_settings from organizations where id = $1`;
 
 interface LinhaDeConfig {
+  module_settings?: unknown;
   llm: unknown;
   teto?: number | string | null;
   modo?: string | null;
@@ -209,7 +212,7 @@ interface LinhaDeConfig {
 }
 
 const ORCAMENTO_DESLIGADO: OrcamentoDaOrg = {
-  modo: 'off',
+  modo: "off",
   tetoCents: 0,
   efetivoEm: null,
   limiarPct: LIMIAR_PADRAO_PCT,
@@ -224,7 +227,7 @@ const ORCAMENTO_DESLIGADO: OrcamentoDaOrg = {
 function causaDoBanco(err: unknown): string {
   const codigo = (err as { code?: unknown } | null)?.code;
   const texto = err instanceof Error ? err.message : String(err);
-  return `${typeof codigo === 'string' ? codigo : 'sem_sqlstate'}: ${texto}`.slice(0, 300);
+  return `${typeof codigo === "string" ? codigo : "sem_sqlstate"}: ${texto}`.slice(0, 300);
 }
 
 /**
@@ -272,9 +275,10 @@ export async function resolveOrgLlmConfig(
     ({ rows } = await db.query<LinhaDeConfig>(SQL_CONFIG_LEGADO, [organizationId]));
   }
   if (rows.length === 0) {
-    throw new Error('organização inexistente ao resolver config LLM');
+    throw new Error("organização inexistente ao resolver config LLM");
   }
   const linha = rows[0];
+  if (!moduloIaEstaLiberado(linha?.module_settings)) throw new ModuloIaBloqueadoError();
   const settings = llmSettingsSchema.parse(linha?.llm ?? {});
   const provider = override?.provider ?? settings.provider;
 
@@ -329,11 +333,11 @@ export async function resolveOrgLlmConfig(
       iv: byteaToBuffer(cred.api_key_iv),
       tag: byteaToBuffer(cred.api_key_tag),
     });
-  } else if (provider === 'anthropic' && cfg.anthropicApiKey) {
+  } else if (provider === "anthropic" && cfg.anthropicApiKey) {
     apiKey = cfg.anthropicApiKey;
-  } else if (provider === 'openai' && cfg.openaiApiKey) {
+  } else if (provider === "openai" && cfg.openaiApiKey) {
     apiKey = cfg.openaiApiKey;
-  } else if (provider === 'openrouter' && cfg.openrouterApiKey) {
+  } else if (provider === "openrouter" && cfg.openrouterApiKey) {
     apiKey = cfg.openrouterApiKey;
   } else {
     throw new LlmNotConfiguredError();

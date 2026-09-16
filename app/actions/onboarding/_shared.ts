@@ -8,15 +8,12 @@ import { supportWriteError } from "@/lib/impersonate/support";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OnboardingState } from "@/lib/schemas/onboarding";
+import { moduloIaEstaLiberado } from "@/lib/ai/modulo";
 
 export class OnboardingError extends Error {
   constructor(
     public readonly code:
-      | "auth_required"
-      | "no_active_org"
-      | "forbidden"
-      | "not_found"
-      | "db_error",
+      "auth_required" | "no_active_org" | "forbidden" | "not_found" | "db_error",
     message: string,
   ) {
     super(message);
@@ -36,7 +33,8 @@ export interface OnboardingCtx {
 export async function requireOnboardingCtx(): Promise<OnboardingCtx> {
   const user = await loadAuthUser();
   if (!user) throw new OnboardingError("auth_required", "Auth required.");
-  if (supportWriteError(user.support)) throw new OnboardingError("forbidden", "Acompanhamento somente leitura ou encerrado.");
+  if (supportWriteError(user.support))
+    throw new OnboardingError("forbidden", "Acompanhamento somente leitura ou encerrado.");
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) throw new OnboardingError("no_active_org", "Sem organização ativa.");
   return {
@@ -52,11 +50,12 @@ export async function requireOnboardingCtx(): Promise<OnboardingCtx> {
 export async function loadOnboardingState(orgId: string): Promise<{
   state: OnboardingState;
   onboardedAt: string | null;
+  aiModuleEnabled: boolean;
 }> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("organizations")
-    .select("onboarding_state, onboarded_at")
+    .select("onboarding_state, onboarded_at, settings")
     .eq("id", orgId)
     .maybeSingle();
   if (error) throw new OnboardingError("db_error", error.message);
@@ -64,6 +63,7 @@ export async function loadOnboardingState(orgId: string): Promise<{
   return {
     state: (data.onboarding_state as OnboardingState | null) ?? {},
     onboardedAt: (data.onboarded_at as string | null) ?? null,
+    aiModuleEnabled: moduloIaEstaLiberado(data.settings),
   };
 }
 

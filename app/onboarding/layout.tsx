@@ -21,12 +21,15 @@ export default async function OnboardingLayout({ children }: { children: React.R
   // é a tela que CRIA a organização que falta.
   if (!activeOrg) redirect("/get-started");
 
-  const { state, onboardedAt } = await loadOnboardingState(activeOrg.orgId);
+  const { state, onboardedAt, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId);
   if (onboardedAt) redirect("/app/inbox");
 
   // Os passos que ESTA instalação oferece, com o que já foi resolvido. O
   // indicador não decide mais nada sozinho — ele desenha o que recebe.
-  const passos = passosVisiveis({ lojaLigada: env.NUVEMSHOP_ENABLED }).map((p) => ({
+  const passos = passosVisiveis({
+    lojaLigada: env.NUVEMSHOP_ENABLED,
+    iaLiberada: aiModuleEnabled,
+  }).map((p) => ({
     segmento: p.segmento,
     rotulo: p.rotulo,
     cumprido: p.cumprido(state),
@@ -46,7 +49,9 @@ export default async function OnboardingLayout({ children }: { children: React.R
                 <SimboloDoProduto nome={marca.name} decorativo className="h-9 w-9" />
               )}
               <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">{marca.name}</p>
+                <p className="text-xs tracking-wider text-muted-foreground uppercase">
+                  {marca.name}
+                </p>
                 <h1 className="text-lg font-semibold tracking-tight">{activeOrg.name}</h1>
               </div>
             </div>

@@ -18,7 +18,7 @@ export default async function AiLayout({ children }: { children: React.ReactNode
     .select("settings")
     .eq("id", org.orgId)
     .maybeSingle();
-  if (!moduloIaEstaLiberado(data?.settings)) redirect("/app/inbox");
+  if (!data || !moduloIaEstaLiberado(data.settings)) redirect("/app/inbox");
   return (
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1">{children}</div>
