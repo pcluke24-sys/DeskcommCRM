@@ -6,13 +6,41 @@ import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { csvDoFunil, type HistoricoDoFunil } from "@/lib/reports/historico-do-funil";
+import {
+  csvDeAtribuicao,
+  csvDoFunil,
+  type AgrupamentoDeAtribuicao,
+  type HistoricoDeAtribuicao,
+  type HistoricoDoFunil,
+} from "@/lib/reports/historico-do-funil";
 
 interface Resposta {
   pipelines: Array<{ id: string; name: string }>;
   pipeline: { id: string; name: string } | null;
   report: HistoricoDoFunil | null;
   window: { from: string; to: string };
+}
+interface RespostaAtribuicao {
+  pipelines: Array<{ id: string; name: string }>;
+  pipeline: { id: string; name: string } | null;
+  attribution: HistoricoDeAtribuicao | null;
+  window: { from: string; to: string };
+}
+const nomesDosAgrupamentos: Record<AgrupamentoDeAtribuicao, string> = {
+  origem: "Origem",
+  utm_source: "UTM source",
+  utm_campaign: "UTM campaign",
+  ad_reference: "Referência de anúncio",
+};
+function rotuloDoGrupo(groupBy: AgrupamentoDeAtribuicao, key: string) {
+  const semValor: Partial<Record<AgrupamentoDeAtribuicao, string>> = {
+    origem: "Sem origem informada",
+    utm_source: "Sem UTM source",
+    utm_campaign: "Sem UTM campaign",
+    ad_reference: "Sem referência de anúncio",
+  };
+  if (key === "sem_origem" || key === "sem_utm_source" || key === "sem_utm_campaign" || key === "sem_referencia_de_anuncio") return semValor[groupBy];
+  return key;
 }
 function dataLocal(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -38,6 +66,8 @@ export function HistoricoClient() {
   });
   const [ate, setAte] = useState(() => dataLocal(new Date()));
   const [pipelineId, setPipelineId] = useState("");
+  const [visao, setVisao] = useState<"etapas" | "atribuicao">("etapas");
+  const [agrupamento, setAgrupamento] = useState<AgrupamentoDeAtribuicao>("origem");
   const periodo = janela(de, ate);
   const consulta = useQuery({
     queryKey: ["reports", "funnel-history", de, ate, pipelineId],
@@ -50,16 +80,37 @@ export function HistoricoClient() {
   });
   const dados = consulta.data?.data;
   const report = dados?.report;
+  const atribuicaoConsulta = useQuery({
+    queryKey: ["reports", "funnel-attribution", de, ate, pipelineId, dados?.pipeline?.id, agrupamento],
+    enabled: !!periodo && visao === "atribuicao",
+    queryFn: () =>
+      apiClient.get<{ data: RespostaAtribuicao }>(
+        `/api/v1/reports/funnel?${new URLSearchParams({
+          ...periodo!,
+          group_by: agrupamento,
+          ...(pipelineId ? { pipeline_id: pipelineId } : {}),
+        })}`,
+      ),
+    staleTime: 30000,
+  });
+  const attribution = atribuicaoConsulta.data?.data.attribution;
   function baixar() {
-    if (!report || !dados?.pipeline) return;
+    if (!dados?.pipeline) return;
+    const conteudo =
+      visao === "atribuicao" && attribution
+        ? csvDeAtribuicao(attribution, dados.pipeline.name, dados.window.from, dados.window.to)
+        : report
+          ? csvDoFunil(report, dados.pipeline.name, dados.window.from, dados.window.to)
+          : null;
+    if (!conteudo) return;
     const blob = new Blob(
-      [csvDoFunil(report, dados.pipeline.name, dados.window.from, dados.window.to)],
+      [conteudo],
       { type: "text/csv;charset=utf-8" },
     );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `historico-funil-${de}-${ate}.csv`;
+    a.download = `${visao === "atribuicao" ? "atribuicao-funil" : "historico-funil"}-${de}-${ate}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -91,14 +142,22 @@ export function HistoricoClient() {
         </label>
         <Button
           variant="outline"
-          onClick={() => consulta.refetch()}
+          onClick={() => {
+            void consulta.refetch();
+            if (visao === "atribuicao") void atribuicaoConsulta.refetch();
+          }}
           disabled={!periodo || consulta.isFetching}
         >
           Atualizar
         </Button>
         <Button
           onClick={baixar}
-          disabled={!periodo || !report || consulta.isFetching || consulta.isError}
+          disabled={
+            !periodo ||
+            consulta.isFetching ||
+            consulta.isError ||
+            (visao === "etapas" ? !report : !attribution || atribuicaoConsulta.isFetching)
+          }
         >
           Baixar CSV
         </Button>
@@ -107,6 +166,29 @@ export function HistoricoClient() {
         Datas no fuso do seu navegador ({Intl.DateTimeFormat().resolvedOptions().timeZone}). Máximo:
         366 dias. Entradas repetidas contam uma vez por lead em cada etapa.
       </p>
+      <div className="flex flex-wrap items-center gap-2" aria-label="Tipo de relatório">
+        <Button variant={visao === "etapas" ? "default" : "outline"} onClick={() => setVisao("etapas")}>
+          Por etapas
+        </Button>
+        <Button variant={visao === "atribuicao" ? "default" : "outline"} onClick={() => setVisao("atribuicao")}>
+          Por origem e campanhas
+        </Button>
+        {visao === "atribuicao" && (
+          <label className="ml-1 space-y-1 text-sm">
+            Agrupar por
+            <select
+              aria-label="Agrupar relatório de atribuição por"
+              className="flex h-9 w-full rounded-md border bg-background px-3"
+              value={agrupamento}
+              onChange={(e) => setAgrupamento(e.target.value as AgrupamentoDeAtribuicao)}
+            >
+              {Object.entries(nomesDosAgrupamentos).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
       {!periodo && <p role="alert">Selecione um período válido de até 366 dias.</p>}
       {consulta.isLoading && <p role="status">Carregando histórico…</p>}
       {consulta.isError && (
@@ -114,7 +196,7 @@ export function HistoricoClient() {
           Não foi possível carregar o relatório. Clique em Atualizar para tentar novamente.
         </p>
       )}
-      {periodo && report && (
+      {visao === "etapas" && periodo && report && (
         <>
           <p className="rounded-md border p-3 text-sm">
             Coleta iniciada:{" "}
@@ -190,6 +272,60 @@ export function HistoricoClient() {
           <Link className="text-sm underline" href="/app/kanban">
             Abrir Kanban para acompanhar e agir
           </Link>
+        </>
+      )}
+      {visao === "atribuicao" && atribuicaoConsulta.isLoading && (
+        <p role="status">Carregando atribuição…</p>
+      )}
+      {visao === "atribuicao" && atribuicaoConsulta.isError && (
+        <p role="alert" className="text-destructive">
+          Não foi possível carregar a atribuição. Clique em Atualizar para tentar novamente.
+        </p>
+      )}
+      {visao === "atribuicao" && attribution && (
+        <>
+          <p className="rounded-md border p-3 text-sm">
+            Cada célula é o número de leads únicos que entraram naquela etapa no período, agrupados
+            pela origem registrada quando o lead nasceu. Um lead pode aparecer em mais de uma etapa.
+          </p>
+          {attribution.groups.length === 0 ? (
+            <p className="rounded-md border p-4">
+              Ainda não há entradas registradas neste período. Crie ou mova um lead no Kanban e
+              clique em Atualizar.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="p-3 whitespace-nowrap">{nomesDosAgrupamentos[agrupamento]}</th>
+                    {agrupamento === "ad_reference" && (
+                      <th className="p-3 whitespace-nowrap">Título recebido</th>
+                    )}
+                    {attribution.stages.map((stage) => (
+                      <th key={stage.id} className="p-3 whitespace-nowrap">{stage.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {attribution.groups.map((group) => (
+                    <tr key={group.key} className="border-t">
+                      <td className="p-3 font-medium">{rotuloDoGrupo(agrupamento, group.key)}</td>
+                      {agrupamento === "ad_reference" && <td className="p-3">{group.ad_title ?? "—"}</td>}
+                      {attribution.stages.map((stage) => (
+                        <td key={stage.id} className="p-3">{group.stage_counts[stage.id] ?? 0}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            “Referência de anúncio” mostra o identificador capturado no clique, como o CTWA CLID;
+            ele não é o ID interno do anúncio na plataforma. O título só aparece quando veio no
+            payload de origem. Dados sem UTM ou referência ficam agrupados separadamente.
+          </p>
         </>
       )}
       {dados && !dados.pipeline && <p>Nenhum funil disponível nesta empresa.</p>}

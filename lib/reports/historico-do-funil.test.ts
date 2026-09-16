@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { csvDoFunil, type HistoricoDoFunil } from "./historico-do-funil";
+import {
+  csvDeAtribuicao,
+  csvDoFunil,
+  type HistoricoDeAtribuicao,
+  type HistoricoDoFunil,
+} from "./historico-do-funil";
 const report: HistoricoDoFunil = {
   enabled_since: "2026-09-16T14:00:00Z",
   totals: { leads: 2, received: 2, won: 0, lost: 0 },
@@ -14,6 +19,18 @@ const report: HistoricoDoFunil = {
       next_stage_id: null,
       advanced: null,
       advance_rate: null,
+    },
+  ],
+};
+const attribution: HistoricoDeAtribuicao = {
+  enabled_since: "2026-09-16T14:00:00Z",
+  group_by: "ad_reference",
+  stages: [{ id: "stage", name: "Em contato", is_won: false, is_lost: false }],
+  groups: [
+    {
+      key: '=HYPERLINK("url")',
+      ad_title: "+Anúncio",
+      stage_counts: { stage: 2 },
     },
   ],
 };
@@ -34,5 +51,12 @@ describe("CSV do histórico do funil", () => {
     expect(csv).not.toMatch(/phone|contact_id|telefone/);
     expect(csv).not.toContain("NaN");
     expect(csv.endsWith(';"";"";""')).toBe(true);
+  });
+  it("exporta atribuição por etapa sem deixar UTM ou referência virar fórmula", () => {
+    const csv = csvDeAtribuicao(attribution, "F", "de", "ate");
+    expect(csv).toContain('"\'=HYPERLINK(""url"")"');
+    expect(csv).toContain('"\'+Anúncio"');
+    expect(csv).toContain('"2"');
+    expect(csv).not.toMatch(/phone|contact_id|telefone/);
   });
 });

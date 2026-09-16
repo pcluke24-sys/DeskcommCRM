@@ -4,7 +4,11 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
-import type { HistoricoDoFunil } from "@/lib/reports/historico-do-funil";
+import {
+  agrupamentosDeAtribuicao,
+  type HistoricoDeAtribuicao,
+  type HistoricoDoFunil,
+} from "@/lib/reports/historico-do-funil";
 
 export const dynamic = "force-dynamic";
 const schema = z
@@ -12,6 +16,7 @@ const schema = z
     from: z.iso.datetime({ offset: true }),
     to: z.iso.datetime({ offset: true }),
     pipeline_id: z.uuid().optional(),
+    group_by: z.enum(agrupamentosDeAtribuicao).optional(),
   })
   .refine(
     (v) =>
@@ -29,6 +34,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     from: q.get("from"),
     to: q.get("to"),
     pipeline_id: q.get("pipeline_id") ?? undefined,
+    group_by: q.get("group_by") ?? undefined,
   });
   if (!parsed.success)
     return fail("validation_failed", "Selecione datas válidas (máximo de 366 dias).", 422, {
@@ -47,6 +53,31 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!pipeline && parsed.data.pipeline_id)
     return fail("validation_failed", "Funil indisponível nesta empresa.", 422, { requestId });
   if (!pipeline) return ok({ pipelines: [], pipeline: null, report: null }, { requestId });
+  if (parsed.data.group_by) {
+    const { data, error } = await db.rpc("fn_funnel_attribution_history", {
+      p_org: authz.org.orgId,
+      p_pipeline: pipeline.id,
+      p_from: parsed.data.from,
+      p_to: parsed.data.to,
+      p_group_by: parsed.data.group_by,
+    });
+    if (error)
+      return fail(
+        "internal_error",
+        "Não foi possível carregar a atribuição do funil. Tente novamente.",
+        500,
+        { requestId },
+      );
+    return ok(
+      {
+        pipelines,
+        pipeline,
+        attribution: data as unknown as HistoricoDeAtribuicao,
+        window: { from: parsed.data.from, to: parsed.data.to },
+      },
+      { requestId },
+    );
+  }
   const { data, error } = await db.rpc("fn_funnel_history", {
     p_org: authz.org.orgId,
     p_pipeline: pipeline.id,

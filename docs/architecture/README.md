@@ -16,7 +16,7 @@ ser fonte sem ninguém decidir isso.
 
 | arquivo | escopo |
 |---|---|
-| `historico-do-funil.architecture.json` | Coleta prospectiva no CRM, agregados sob RLS, filtros de período e CSV pelo hub Análise. |
+| `historico-do-funil.architecture.json` | Coleta prospectiva no CRM, agregados sob RLS por etapa, origem, UTM ou referência de anúncio, filtros de período e CSV pelo hub Análise. |
 | `origem-e-movimento-no-inbox.architecture.json` | Origem do lead no Inbox e movimentação pela mesma rota, histórico e conversões do Kanban. |
 | `pre-go-live-whatsapp.architecture.json` | modo de teste por canal (issue #573): configuração administrativa, gate compartilhado, releitura no envio e validação pelo Inbox |
 | `app-da-meta-da-instalacao.architecture.json` | App da Meta da instalação (issue #850, migration 0257) — 10 peças, 12 arestas; a tela `/admin/meta` que grava a chave e mostra o token uma vez, o resolvedor que serve o par inteiro de UMA fonte (banco, com o `.env` de reserva) e por que Conexões só mostra o token quando ele veio do `.env` |

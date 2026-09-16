@@ -11,7 +11,7 @@
     { "id": "db", "label": "Banco" },
     { "id": "ui", "label": "Leitura" }
   ],
-  "mainPath": ["leads", "ledger", "rpc", "page", "csv"],
+  "mainPath": ["leads", "ledger", "rpc", "attribution", "page", "csv"],
   "nodes": [
     {
       "id": "leads",
@@ -38,17 +38,25 @@
       "sublabel": "agregados completos, janela [from,to)"
     },
     {
+      "id": "attribution",
+      "lane": "db",
+      "col": 4,
+      "type": "database",
+      "label": "fn_funnel_attribution_history",
+      "sublabel": "origem, UTM ou referência; apenas agregados sob RLS"
+    },
+    {
       "id": "page",
       "lane": "ui",
-      "col": 1,
+      "col": 2,
       "type": "frontend",
       "label": "/app/funnel-history",
-      "sublabel": "hub Análise, filtros, erro visível e Atualizar"
+      "sublabel": "hub Análise, etapas e atribuição, filtros e Atualizar"
     },
     {
       "id": "csv",
       "lane": "ui",
-      "col": 2,
+      "col": 3,
       "type": "frontend",
       "label": "CSV agregado",
       "sublabel": "sem dados pessoais; fórmulas neutralizadas"
@@ -56,7 +64,7 @@
     {
       "id": "kanban",
       "lane": "ui",
-      "col": 3,
+      "col": 4,
       "type": "frontend",
       "label": "/app/kanban",
       "sublabel": "ação humana sobre os gargalos"
@@ -65,7 +73,9 @@
   "edges": [
     { "id": "e1", "from": "leads", "to": "ledger", "label": "registro transacional, sem HTTP" },
     { "id": "e2", "from": "ledger", "to": "rpc", "label": "entradas, únicos, avanço e desfecho" },
+    { "id": "e2a", "from": "ledger", "to": "attribution", "label": "únicos por etapa e origem imutável do lead" },
     { "id": "e3", "from": "rpc", "to": "page", "label": "API com sessão e empresa ativa" },
+    { "id": "e3a", "from": "attribution", "to": "page", "label": "API agrega sem PII e respeita a empresa ativa" },
     { "id": "e4", "from": "page", "to": "csv", "label": "baixar com a mesma régua" },
     { "id": "e5", "from": "page", "to": "kanban", "label": "acompanhar e agir" },
     { "id": "e6", "from": "kanban", "to": "leads", "label": "operador ou agente avança" }

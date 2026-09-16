@@ -14,6 +14,24 @@ export interface HistoricoDoFunil {
   }>;
 }
 
+export const agrupamentosDeAtribuicao = [
+  "origem",
+  "utm_source",
+  "utm_campaign",
+  "ad_reference",
+] as const;
+export type AgrupamentoDeAtribuicao = (typeof agrupamentosDeAtribuicao)[number];
+export interface HistoricoDeAtribuicao {
+  enabled_since: string | null;
+  group_by: AgrupamentoDeAtribuicao;
+  stages: Array<{ id: string; name: string; is_won: boolean; is_lost: boolean }>;
+  groups: Array<{
+    key: string;
+    ad_title: string | null;
+    stage_counts: Record<string, number>;
+  }>;
+}
+
 /** CSV agregado, sem dados pessoais; evita fórmulas em nomes configuráveis. */
 function celula(valor: string | number | null): string {
   const texto = valor === null ? "" : String(valor);
@@ -50,6 +68,36 @@ export function csvDoFunil(
       relatorio.stages.find((n) => n.id === s.next_stage_id)?.name ?? null,
       s.advanced,
       s.advance_rate,
+    ]),
+  ];
+  return "\uFEFF" + linhas.map((l) => l.map(celula).join(";")).join("\r\n");
+}
+
+/** CSV de atribuição agregado, sem nomes, telefones ou conteúdo de conversa. */
+export function csvDeAtribuicao(
+  relatorio: HistoricoDeAtribuicao,
+  funil: string,
+  de: string,
+  ate: string,
+): string {
+  const linhas: Array<Array<string | number | null>> = [
+    [
+      "Funil",
+      "De (inclusivo)",
+      "Até (exclusivo)",
+      "Agrupamento",
+      "Origem/UTM/referência",
+      "Título recebido do anúncio",
+      ...relatorio.stages.map((stage) => stage.name),
+    ],
+    ...relatorio.groups.map((group) => [
+      funil,
+      de,
+      ate,
+      relatorio.group_by,
+      group.key,
+      group.ad_title,
+      ...relatorio.stages.map((stage) => group.stage_counts[stage.id] ?? 0),
     ]),
   ];
   return "\uFEFF" + linhas.map((l) => l.map(celula).join(";")).join("\r\n");

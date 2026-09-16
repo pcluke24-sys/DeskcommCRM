@@ -3,6 +3,7 @@
 | Timestamp | Migration adicional do fork | Finalidade |
 | --- | --- | --- |
 | `20260916140000` | `0261_historico_do_funil` | Registro prospectivo de entradas e desfechos; agregação por período com RLS e sem backfill. |
+| `20260916150000` | `0262_atribuicao_no_historico_do_funil` | Leitura agregada, prospectiva e isolada por empresa das entradas por origem, UTM ou referência de anúncio; sem dado pessoal nem backfill. |
 
 Migrations applied to Supabase project `rrydmwnporysaiysiztn` (sa-east-1, Postgres 17) via Supabase MCP on 2026-04-28.
 
