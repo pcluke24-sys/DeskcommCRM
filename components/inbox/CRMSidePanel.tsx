@@ -27,6 +27,7 @@ import { useEditLead } from "@/hooks/kanban/useUpdateLead";
 import { cn } from "@/lib/utils";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { atributosDeOrigem } from "@/lib/leads/attribution-display";
 
 interface Props {
   conversation: ConversationWithContact | null;
@@ -40,8 +41,21 @@ interface LeadRow {
   currency: string | null;
   updated_at: string;
   pipeline_id: string;
+  stage_id: string;
+  position_in_stage: number;
+  source: string;
+  source_metadata: Record<string, unknown> | null;
   custom_fields: Record<string, unknown> | null;
   field_defs: CustomFieldDef[];
+}
+
+interface StageRow {
+  id: string;
+  pipeline_id: string;
+  name: string;
+  position: number;
+  is_won: boolean;
+  is_lost: boolean;
 }
 
 interface OrderRow {
@@ -293,11 +307,13 @@ function SemLista({
  */
 function InboxLeadEditor({
   leads,
+  stages,
   selecionadoId,
   onSelecionar,
   onSalvo,
 }: {
   leads: LeadRow[];
+  stages: StageRow[];
   selecionadoId: string | null;
   onSelecionar: (id: string) => void;
   onSalvo: () => void;
@@ -345,7 +361,70 @@ function InboxLeadEditor({
         valores={ativo.custom_fields ?? {}}
         onSalvo={onSalvo}
       />
+      <MoverLeadPeloInbox key={`${ativo.id}:${ativo.updated_at}`} lead={ativo} stages={stages.filter((stage) => stage.pipeline_id === ativo.pipeline_id)} onSalvo={onSalvo} />
+      <OrigemDoLead lead={ativo} />
     </div>
+  );
+}
+
+/** O Inbox chama a mesma rota do Kanban, preservando histórico e conversões. */
+function MoverLeadPeloInbox({ lead, stages, onSalvo }: { lead: LeadRow; stages: StageRow[]; onSalvo: () => void }) {
+  const t = useT();
+  const [stageId, setStageId] = useState(lead.stage_id);
+  const [salvando, setSalvando] = useState(false);
+
+  const etapaAtual = stages.find((stage) => stage.id === lead.stage_id);
+  const podeMover = lead.status === "open" && stages.length > 0;
+
+  async function mover() {
+    if (!podeMover || stageId === lead.stage_id) return;
+    setSalvando(true);
+    try {
+      await apiClient.post(`/api/v1/leads/${lead.id}/move`, {
+        stage_id: stageId,
+        // O Inbox não conhece os vizinhos da coluna; um timestamp mantém uma
+        // posição distinta e a rota central preserva a concorrência.
+        position_in_stage: Date.now(),
+        expected_updated_at: lead.updated_at,
+      });
+      toast.success(t("Lead movido no funil."));
+      onSalvo();
+    } catch {
+      // A API exibe o erro; a recarga mostra quem venceu uma corrida entre abas.
+      onSalvo();
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <section className="rounded-md border border-border p-2 text-xs" data-testid="inbox-mover-lead">
+      <div className="font-medium">{t("Etapa do funil")}</div>
+      <div className="mt-1 flex gap-2">
+        <select aria-label={t("Mover lead para etapa")} value={stageId} disabled={!podeMover || salvando} onChange={(event) => setStageId(event.target.value)} className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1">
+          {stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}
+        </select>
+        <Button size="sm" className="h-7 text-xs" disabled={!podeMover || salvando || stageId === lead.stage_id} onClick={() => void mover()}>
+          {salvando ? t("Movendo…") : t("Mover")}
+        </Button>
+      </div>
+      {!podeMover && <p className="mt-1 text-muted-foreground">{lead.status === "open" ? t("Não há etapas disponíveis neste funil.") : t("Lead encerrado: abra uma nova oportunidade para movê-lo.")}</p>}
+      {etapaAtual && <p className="mt-1 text-muted-foreground">{t("Etapa atual")}: {etapaAtual.name}</p>}
+    </section>
+  );
+}
+
+function OrigemDoLead({ lead }: { lead: LeadRow }) {
+  const t = useT();
+  const atributos = atributosDeOrigem(lead.source, lead.source_metadata);
+  if (atributos.length === 0) return null;
+  return (
+    <section className="rounded-md border border-border p-2 text-xs" data-testid="inbox-origem-lead">
+      <div className="font-medium">{t("Origem do lead")}</div>
+      <dl className="mt-1 space-y-0.5 text-muted-foreground">
+        {atributos.map((atributo) => <div key={atributo.rotulo} className="flex gap-1"><dt>{t(atributo.rotulo)}:</dt><dd className="min-w-0 truncate">{atributo.valor}</dd></div>)}
+      </dl>
+    </section>
   );
 }
 
@@ -417,6 +496,7 @@ export function CRMSidePanel({ conversation }: Props) {
 
 
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
+  const [stages, setStages] = useState<StageRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [activities, setActivities] = useState<ActivityRow[] | null>(null);
   const [demandas, setDemandas] = useState<DemandaRow[] | null>(null);
@@ -447,6 +527,7 @@ export function CRMSidePanel({ conversation }: Props) {
   useEffect(() => {
     if (!contactId) {
       setLeads(null);
+      setStages([]);
       setOrders(null);
       setActivities(null);
       setDemandas(null);
@@ -466,6 +547,7 @@ export function CRMSidePanel({ conversation }: Props) {
         const r = await apiClient.get<{
           data: {
             leads: LeadRow[];
+            stages?: StageRow[];
             orders: OrderRow[];
             activities: ActivityRow[];
             demandas: DemandaRow[];
@@ -476,6 +558,7 @@ export function CRMSidePanel({ conversation }: Props) {
         if (cancelled) return;
         setSummaryContactId(contactId);
         setLeads(r.data.leads);
+        setStages(r.data.stages ?? []);
         setOrders(r.data.orders);
         setActivities(r.data.activities);
         // `?? []` e não `?? null`: aqui a leitura DEU CERTO. Cair em `null`
@@ -490,6 +573,7 @@ export function CRMSidePanel({ conversation }: Props) {
         // não conseguiu ler — nunca que não há.
         setErro(true);
         setLeads(null);
+        setStages([]);
         setOrders(null);
         setActivities(null);
         setDemandas(null);
@@ -706,6 +790,7 @@ export function CRMSidePanel({ conversation }: Props) {
         ) : leads && leads.length > 0 ? (
           <fieldset disabled={readonly}><InboxLeadEditor
             leads={leads}
+            stages={stages}
             selecionadoId={leadAtivoId}
             onSelecionar={setLeadAtivoId}
             onSalvo={recarregar}

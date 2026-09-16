@@ -38,7 +38,7 @@ export const dynamic = "force-dynamic";
 
 /** Sem o embed do funil o painel não consegue montar os campos customizados. */
 const LEAD_COLS =
-  "id, title, status, value_cents, currency, updated_at, pipeline_id, custom_fields, crm_pipelines(settings)";
+  "id, title, status, value_cents, currency, updated_at, pipeline_id, stage_id, position_in_stage, source, source_metadata, custom_fields, crm_pipelines(settings)";
 const ORDER_COLS = "id, external_id, status, total_cents, currency, created_at";
 /** Acompanha o que a timeline mostra — `reason` e `actor_kind` inclusive. */
 /**
@@ -131,6 +131,20 @@ export async function GET(
     return fail("internal_error", falha.message, 500, { requestId });
   }
 
+  // O seletor do Inbox só recebe as etapas dos funis dos próprios leads que
+  // acabaram de ser lidos. A RLS segue valendo nesta segunda leitura.
+  const pipelineIds = [...new Set((leads.data ?? []).map((lead) => lead.pipeline_id as string))];
+  const { data: etapas, error: etapasError } = pipelineIds.length === 0
+    ? { data: [], error: null }
+    : await supabase
+      .from("crm_stages")
+      .select("id, pipeline_id, name, position, is_won, is_lost")
+      .eq("organization_id", contactScope.organization_id)
+      .in("pipeline_id", pipelineIds)
+      .eq("is_archived", false)
+      .order("position", { ascending: true });
+  if (etapasError) return fail("internal_error", etapasError.message, 500, { requestId });
+
   // QUEM agiu, e não só "uma pessoa". O lookup roda sobre os autores DISTINTOS
   // da janela (12 linhas, quase sempre 1 ou 2 pessoas), e degrada declarado
   // quando não há service role — a tela cai no rótulo genérico que ela já usava.
@@ -152,6 +166,7 @@ export async function GET(
       })),
       demandas: demandas.data ?? [],
       fatos: fatos.data ?? [], historico: historico.data ?? [],
+      stages: etapas ?? [],
     },
     { requestId },
   );

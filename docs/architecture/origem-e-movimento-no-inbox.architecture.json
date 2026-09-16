@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Origem e movimento no Inbox",
+    "subtitle": "Atribuição visível e uma única ação de etapa",
+    "output": "origem-e-movimento-no-inbox.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "entrada", "label": "Entrada" },
+    { "id": "operacao", "label": "Operação" }
+  ],
+  "mainPath": ["captura", "lead", "summary", "inbox", "move"],
+  "nodes": [
+    { "id": "captura", "lane": "entrada", "col": 1, "type": "integration", "label": "Formulário ou anúncio", "sublabel": "UTM ou CTWA quando recebido" },
+    { "id": "lead", "lane": "entrada", "col": 2, "type": "database", "label": "crm_leads.source_metadata", "sublabel": "origem do próprio negócio" },
+    { "id": "summary", "lane": "operacao", "col": 1, "type": "backend", "label": "Resumo do contato", "sublabel": "lead e etapas visíveis pela empresa" },
+    { "id": "inbox", "lane": "operacao", "col": 2, "type": "frontend", "label": "Inbox", "sublabel": "origem e seletor de etapa" },
+    { "id": "move", "lane": "operacao", "col": 3, "type": "backend", "label": "POST lead move", "sublabel": "timeline, auditoria, histórico e Meta" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "captura", "to": "lead", "label": "metadados recebidos" },
+    { "id": "e2", "from": "lead", "to": "summary", "label": "leitura isolada por empresa" },
+    { "id": "e3", "from": "summary", "to": "inbox", "label": "origem e etapas" },
+    { "id": "e4", "from": "inbox", "to": "move", "label": "mesma ação do Kanban" }
+  ]
+}
