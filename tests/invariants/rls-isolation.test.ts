@@ -288,6 +288,10 @@ export const TABLES = [
   "messages",
   "contacts",
   "crm_leads",
+  // 0261: o trigger dos leads semeados acima gera uma entrada por organização.
+  // As provas com JWT abaixo medem leitura própria e negativa cruzada.
+  "crm_funnel_entries",
+  "crm_funnel_tracking",
   "org_memory_versions",
   "org_memory_entries",
   "skill_activations",
