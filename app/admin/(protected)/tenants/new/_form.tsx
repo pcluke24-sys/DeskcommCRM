@@ -86,6 +86,7 @@ export function NewTenantForm() {
       legal_name: "",
       cnpj: "",
       plan: "standard",
+      ai_module_enabled: false,
       owner_email: "",
     },
   });
@@ -123,6 +124,7 @@ export function NewTenantForm() {
         legal_name: values.legal_name || undefined,
         cnpj: values.cnpj || undefined,
         plan: values.plan,
+        ai_module_enabled: values.ai_module_enabled,
         owner_email: values.owner_email,
         owner_interface_settings: ownerInterface,
       });
@@ -300,6 +302,10 @@ export function NewTenantForm() {
             </div>
 
             {/* owner_email */}
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" {...register("ai_module_enabled")} />
+              {t("Liberar módulo de IA para esta organização")}
+            </label>
             <div className="space-y-1.5">
               <Label htmlFor="owner_email">
                 {t("E-mail do responsável")} <span className="text-error-fg">*</span>

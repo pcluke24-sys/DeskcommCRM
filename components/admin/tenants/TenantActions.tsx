@@ -5,6 +5,8 @@ import { SuspendDialog } from "./SuspendDialog";
 import { ReactivateDialog } from "./ReactivateDialog";
 import { ImpersonateButton } from "@/components/admin/ImpersonateButton";
 import { useT } from "@/hooks/i18n/useT";
+import { apiClient } from "@/lib/api/client";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -14,6 +16,7 @@ interface TenantActionsProps {
   organizationId: string;
   status: "active" | "suspended" | "redacted";
   displayName: string;
+  aiModuleEnabled: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -24,10 +27,23 @@ export function TenantActions({
   organizationId,
   status,
   displayName,
+  aiModuleEnabled,
 }: TenantActionsProps) {
   const t = useT();
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(aiModuleEnabled);
+  const [savingAi, setSavingAi] = useState(false);
+  async function toggleAi() {
+    setSavingAi(true);
+    try {
+      const next = !aiEnabled;
+      await apiClient.patch(`/api/v1/admin/tenants/${organizationId}`, { ai_module_enabled: next });
+      setAiEnabled(next);
+      toast.success(next ? t("Módulo de IA liberado.") : t("Módulo de IA bloqueado."));
+    } catch { toast.error(t("Não foi possível atualizar o módulo de IA.")); }
+    finally { setSavingAi(false); }
+  }
 
   const canSuspend = status === "active";
   const isSuspended = status === "suspended";
@@ -49,6 +65,9 @@ export function TenantActions({
             isRedacted ? t("Tenant redigido — ação não disponível") : undefined
           }
         />
+        <Button className="w-full" variant={aiEnabled ? "outline" : "default"} disabled={isRedacted || savingAi} onClick={toggleAi}>
+          {aiEnabled ? t("Bloquear módulo de IA") : t("Liberar módulo de IA")}
+        </Button>
 
         {/* Suspend */}
         {canSuspend && (

@@ -207,6 +207,16 @@ export async function POST(req: NextRequest) {
     return fail("internal_error", "Não foi possível criar a organização", 500, { requestId });
   }
   if (org.created) {
+    // A função atômica de criação preserva seu contrato enxuto; a flag comercial
+    // é gravada logo após, ainda no mesmo request administrativo.
+    const { data: createdSettings } = await admin
+      .from("organizations")
+      .select("settings")
+      .eq("id", org.id)
+      .maybeSingle();
+    await admin.from("organizations").update({
+      settings: { ...((createdSettings?.settings as Record<string, unknown> | null) ?? {}), ai_module_enabled: request.ai_module_enabled },
+    }).eq("id", org.id);
     await audit({
       action: "tenant.created_by_platform_admin",
       actorUserId: adminCtx.user.id,
@@ -220,6 +230,7 @@ export async function POST(req: NextRequest) {
         slug: org.slug,
         display_name: org.display_name,
         plan: request.plan,
+        ai_module_enabled: request.ai_module_enabled,
         creator_role: "admin",
       },
     });
