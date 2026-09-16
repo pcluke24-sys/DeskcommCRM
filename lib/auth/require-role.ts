@@ -24,6 +24,7 @@ import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK, type ActiveOrg, type AuthUser, type Role } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
+import { moduloIaEstaLiberado } from "@/lib/ai/modulo";
 
 export type RoleCheck =
   | { ok: true; user: AuthUser; org: ActiveOrg }
@@ -91,6 +92,16 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
 
   // Role efetivo do banco (não do snapshot do cookie/membership em memória).
   const supabase = await createClient();
+  if (resource?.startsWith("ai_")) {
+    const { data: organization } = await supabase
+      .from("organizations")
+      .select("settings")
+      .eq("id", org.orgId)
+      .maybeSingle();
+    if (!moduloIaEstaLiberado(organization?.settings)) {
+      return { ok: false, response: fail("feature_disabled", t("O módulo de IA não está contratado para esta organização."), 403, { requestId }) };
+    }
+  }
   const { data: effectiveRole, error } = await supabase.rpc("fn_user_role_in_org", {
     p_org: org.orgId,
   });

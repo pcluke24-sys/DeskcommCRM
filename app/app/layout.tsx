@@ -111,7 +111,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // Fonte confiável (admin client, org do cookie validado) — nunca do body.
     const mode = (orgRow?.settings as { visibility_mode?: VisibilityMode } | null)
       ?.visibility_mode;
-    activeOrg = { ...activeOrg, visibility_mode: mode ?? DEFAULT_VISIBILITY_MODE };
+    const aiModuleEnabled = (orgRow?.settings as { ai_module_enabled?: unknown } | null)
+      ?.ai_module_enabled !== false;
+    activeOrg = { ...activeOrg, visibility_mode: mode ?? DEFAULT_VISIBILITY_MODE, ai_module_enabled: aiModuleEnabled };
 
     // `marcaDaInstalacao()` é memoizada por TTL no PROCESSO (`lib/branding/
     // instalacao.ts`), e a derivação da cor é cacheada por régua+semente em

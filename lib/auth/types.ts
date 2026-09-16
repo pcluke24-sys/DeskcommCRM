@@ -137,6 +137,8 @@ export interface AuthUser {
 }
 
 export interface ActiveOrg {
+  /** Módulo comercial: ausência preserva organizações existentes como liberadas. */
+  ai_module_enabled?: boolean;
   interface_settings?: InterfaceSettings;
   orgId: string;
   name: string;

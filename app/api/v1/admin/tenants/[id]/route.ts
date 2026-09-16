@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/admin/tenants/[id]
@@ -157,4 +158,29 @@ export async function GET(
   });
 
   return ok({ organization: org, counts, integrations }, { requestId });
+}
+
+/** Liga/desliga o módulo comercial de IA. Somente a plataforma decide isso. */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const requestId = randomUUID();
+  let adminCtx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
+  try { adminCtx = await requirePlatformAdmin(); } catch {
+    return fail("forbidden", "Platform admin required", 403, { requestId });
+  }
+  const body = await req.json().catch(() => null);
+  const parsed = z.object({ ai_module_enabled: z.boolean() }).safeParse(body);
+  if (!parsed.success) return fail("validation_error", "Campo ai_module_enabled inválido", 400, { requestId });
+  const { id } = await params;
+  const admin = createAdminClient();
+  const { data: org } = await admin.from("organizations").select("settings").eq("id", id).maybeSingle();
+  if (!org) return fail("not_found", "Tenant not found", 404, { requestId });
+  const { error } = await admin.from("organizations").update({
+    settings: { ...((org.settings as Record<string, unknown> | null) ?? {}), ai_module_enabled: parsed.data.ai_module_enabled },
+  }).eq("id", id);
+  if (error) return fail("internal_error", "Não foi possível atualizar o módulo de IA", 500, { requestId });
+  await audit({ action: "tenant.ai_module_updated", actorUserId: adminCtx.user.id, actingAsPlatformAdmin: true, bypassedRls: true, organizationId: id, resourceType: "organization", resourceId: id, requestId, metadata: parsed.data });
+  return ok({ ai_module_enabled: parsed.data.ai_module_enabled }, { requestId });
 }

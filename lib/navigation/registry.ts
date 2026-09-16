@@ -109,6 +109,7 @@ export function sidebarGroups(
   isPlatformAdmin: boolean,
   role: Role | null,
   settings?: InterfaceSettings,
+  aiModuleEnabled = true,
 ): Array<{ group: NavGroup; items: NavDestination[] }> {
   const visible = new Set<string>(
     destinosDaInterface(settings, isPlatformAdmin, role).map((d) => d.href),
@@ -116,12 +117,12 @@ export function sidebarGroups(
   return NAV_GROUPS.map((group) => ({
     group,
     items: NAV_DESTINATIONS.filter(
-      (d) => d.group === group.id && (d.sidebar || (!group.hub && !!settings?.destinos)) && visible.has(d.href),
+      (d) => (aiModuleEnabled || d.group !== "ia") && d.group === group.id && (d.sidebar || (!group.hub && !!settings?.destinos)) && visible.has(d.href),
     ),
   })).filter(
     (g) =>
       g.items.length > 0 ||
-      (g.group.hub && NAV_DESTINATIONS.some((d) => d.group === g.group.id && visible.has(d.href))),
+      (g.group.hub && aiModuleEnabled && NAV_DESTINATIONS.some((d) => d.group === g.group.id && visible.has(d.href))),
   );
 }
 
