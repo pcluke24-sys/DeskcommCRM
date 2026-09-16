@@ -53,7 +53,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function ConversationHeader({ conversation }: Props) {
   const t = useT();
-  const { user } = useAuth();
+  const { user, activeOrg } = useAuth();
   const claim = useClaimConversation();
   const release = useReleaseConversation();
   const close = useCloseConversation();
@@ -109,7 +109,7 @@ export function ConversationHeader({ conversation }: Props) {
    * ninguém pediu para reabrir. Oferecer uma ação que não deveria acontecer é
    * pior que não oferecer nenhuma.
    */
-  const podeDevolver = travaVigente;
+  const podeDevolver = activeOrg?.ai_module_enabled !== false && travaVigente;
   /**
    * PAUSAR só aparece quando pausar é um gesto DIFERENTE de assumir.
    *
@@ -124,11 +124,20 @@ export function ConversationHeader({ conversation }: Props) {
    * automático nenhum.
    */
   const podePausar =
-    automaticoAtivo && !encerrada && conversation.assigned_to_user_id !== null;
+    activeOrg?.ai_module_enabled !== false &&
+    automaticoAtivo &&
+    !encerrada &&
+    conversation.assigned_to_user_id !== null;
 
-  if (user.support?.access_mode === "support_readonly") return <header className="flex items-center justify-between border-b p-4">
-    <strong>{displayName}</strong><span className="text-sm text-muted-foreground">{STATUS_LABEL[status] ?? status} · Somente leitura</span>
-  </header>;
+  if (user.support?.access_mode === "support_readonly")
+    return (
+      <header className="flex items-center justify-between border-b p-4">
+        <strong>{displayName}</strong>
+        <span className="text-sm text-muted-foreground">
+          {STATUS_LABEL[status] ?? status} · Somente leitura
+        </span>
+      </header>
+    );
   return (
     // `flex-wrap` porque este header travava a LARGURA DA TELA INTEIRA. Ele
     // media 707px de `min-content` — a identidade do contato encolhia bem
@@ -256,7 +265,9 @@ export function ConversationHeader({ conversation }: Props) {
             // que às vezes faz mais do que o nome promete precisa dizer quando.
             title={
               motivo === "contato_travado"
-                ? t("Religa o atendimento automático para este cliente — vale para todas as conversas dele.")
+                ? t(
+                    "Religa o atendimento automático para este cliente — vale para todas as conversas dele.",
+                  )
                 : t("Devolve esta conversa ao atendimento automático.")
             }
             onClick={() => retomar.mutate({ conversation_id: conversation.id })}
@@ -297,17 +308,31 @@ export function ConversationHeader({ conversation }: Props) {
             disabled={close.isPending}
             onClick={() => {
               if (confirm(t("Fechar esta conversa?"))) {
-                close.mutate({ conversation_id: conversation.id, expected_revision: conversation.service_revision });
+                close.mutate({
+                  conversation_id: conversation.id,
+                  expected_revision: conversation.service_revision,
+                });
               }
             }}
           >
             {t("Fechar")}
           </Button>
         )}
-        {encerrada && <Button size="sm" variant="outline" disabled={reopen.isPending}
-          onClick={() => reopen.mutate({ conversation_id: conversation.id, expected_revision: conversation.service_revision })}>
-          {t("Reabrir")}
-        </Button>}
+        {encerrada && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={reopen.isPending}
+            onClick={() =>
+              reopen.mutate({
+                conversation_id: conversation.id,
+                expected_revision: conversation.service_revision,
+              })
+            }
+          >
+            {t("Reabrir")}
+          </Button>
+        )}
         {/* `xl:hidden` porque a partir de 1280px o painel lateral de CRM entra
             na tela — e ele já tem um "Ver contato", para o MESMO contato, a um
             palmo de distância. Duas portas idênticas na mesma tela não são

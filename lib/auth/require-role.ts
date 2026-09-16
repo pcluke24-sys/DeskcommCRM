@@ -27,8 +27,7 @@ import { createClient } from "@/lib/supabase/server";
 import { moduloIaEstaLiberado } from "@/lib/ai/modulo";
 
 export type RoleCheck =
-  | { ok: true; user: AuthUser; org: ActiveOrg }
-  | { ok: false; response: NextResponse<ApiError> };
+  { ok: true; user: AuthUser; org: ActiveOrg } | { ok: false; response: NextResponse<ApiError> };
 
 interface RequireRoleOpts {
   /** Correlaciona a resposta e o audit com o X-Request-Id da rota. */
@@ -60,22 +59,32 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
   const t = (texto: string) => traduzir(texto, user.idioma);
 
   if (user.support && user.support.status !== "active") {
-    return { ok: false, response: fail("forbidden", "O acompanhamento terminou. Saia para continuar.", 403, { requestId }) };
+    return {
+      ok: false,
+      response: fail("forbidden", "O acompanhamento terminou. Saia para continuar.", 403, {
+        requestId,
+      }),
+    };
   }
   let org: ActiveOrg | null;
   if (organizationId) {
     const membership = user.organizations.find((o) => o.organization_id === organizationId);
-    org = user.support?.organization_id === organizationId
-      ? { orgId: organizationId, name: user.support.name, role: user.support.access_mode === "full" ? "admin" : "viewer" }
-      : membership
-      ? {
-          orgId: membership.organization_id,
-          name: membership.organization_name,
-          role: membership.role,
-        }
-      : allowPlatformAdmin && user.is_platform_admin
-        ? { orgId: organizationId, name: "—", role: "viewer" }
-        : null;
+    org =
+      user.support?.organization_id === organizationId
+        ? {
+            orgId: organizationId,
+            name: user.support.name,
+            role: user.support.access_mode === "full" ? "admin" : "viewer",
+          }
+        : membership
+          ? {
+              orgId: membership.organization_id,
+              name: membership.organization_name,
+              role: membership.role,
+            }
+          : allowPlatformAdmin && user.is_platform_admin
+            ? { orgId: organizationId, name: "—", role: "viewer" }
+            : null;
   } else {
     org = await resolveActiveOrg(user);
   }
@@ -93,13 +102,21 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
   // Role efetivo do banco (não do snapshot do cookie/membership em memória).
   const supabase = await createClient();
   if (resource?.startsWith("ai_")) {
-    const { data: organization } = await supabase
+    const { data: organization, error: moduleError } = await supabase
       .from("organizations")
       .select("settings")
       .eq("id", org.orgId)
       .maybeSingle();
-    if (!moduloIaEstaLiberado(organization?.settings)) {
-      return { ok: false, response: fail("feature_disabled", t("O módulo de IA não está contratado para esta organização."), 403, { requestId }) };
+    if (moduleError || !organization || !moduloIaEstaLiberado(organization.settings)) {
+      return {
+        ok: false,
+        response: fail(
+          "feature_disabled",
+          t("O módulo de IA não está contratado para esta organização."),
+          403,
+          { requestId },
+        ),
+      };
     }
   }
   const { data: effectiveRole, error } = await supabase.rpc("fn_user_role_in_org", {
