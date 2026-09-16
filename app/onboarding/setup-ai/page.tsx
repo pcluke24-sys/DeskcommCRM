@@ -31,7 +31,7 @@ export default async function SetupAiPage() {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/login");
-  const { aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId);
+  const { aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId, true);
   if (!aiModuleEnabled) redirect("/onboarding");
   const idioma = user.idioma;
 

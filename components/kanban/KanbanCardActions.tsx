@@ -16,7 +16,7 @@ import { DotsThree, PencilSimple, Sparkle, Users } from "@/lib/ui/icons";
 import { useWinLead, useEditLead } from "@/hooks/kanban/useUpdateLead";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useAssignableAgents } from "@/hooks/kanban/useAssignableAgents";
-import { usePermission } from "@/hooks/auth/AuthProvider";
+import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
 import { LoseLeadDialog } from "./LoseLeadDialog";
 import { EditLeadDialog } from "./EditLeadDialog";
 import type { Lead } from "@/lib/types/leads";
@@ -29,6 +29,8 @@ interface KanbanCardActionsProps {
 
 export function KanbanCardActions({ lead, pipelineId }: KanbanCardActionsProps) {
   const t = useT();
+  const { activeOrg } = useAuth();
+  const aiEnabled = activeOrg?.ai_module_enabled !== false;
   const [loseOpen, setLoseOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [qualificationOpen, setQualificationOpen] = useState(false);
@@ -39,7 +41,7 @@ export function KanbanCardActions({ lead, pipelineId }: KanbanCardActionsProps) 
   const canAssign = usePermission("pipeline.move_card");
   const { data: members } = useAssignableMembers(canAssign);
   // A rota já devolve só agente ativo e não arquivado — é o picker.
-  const { data: agents } = useAssignableAgents(canAssign);
+  const { data: agents } = useAssignableAgents(canAssign && aiEnabled);
 
   const reassignToUser = (ownerUserId: string | null) => {
     if (ownerUserId === lead.owner_user_id) return;
@@ -82,9 +84,11 @@ export function KanbanCardActions({ lead, pipelineId }: KanbanCardActionsProps) 
           >
             <PencilSimple size={14} className="mr-2" /> {t("Editar")}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setQualificationOpen(true)}>
-            <Sparkle size={14} className="mr-2" /> {t("Analisar qualificação com IA")}
-          </DropdownMenuItem>
+          {aiEnabled && (
+            <DropdownMenuItem onSelect={() => setQualificationOpen(true)}>
+              <Sparkle size={14} className="mr-2" /> {t("Analisar qualificação com IA")}
+            </DropdownMenuItem>
+          )}
           {canAssign && (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>

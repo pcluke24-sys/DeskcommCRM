@@ -47,7 +47,10 @@ export async function requireOnboardingCtx(): Promise<OnboardingCtx> {
   };
 }
 
-export async function loadOnboardingState(orgId: string): Promise<{
+export async function loadOnboardingState(
+  orgId: string,
+  includeAiModule = false,
+): Promise<{
   state: OnboardingState;
   onboardedAt: string | null;
   aiModuleEnabled: boolean;
@@ -55,9 +58,13 @@ export async function loadOnboardingState(orgId: string): Promise<{
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("organizations")
-    .select("onboarding_state, onboarded_at, settings")
+    .select(
+      includeAiModule
+        ? "onboarding_state, onboarded_at, settings"
+        : "onboarding_state, onboarded_at",
+    )
     .eq("id", orgId)
-    .maybeSingle();
+    .maybeSingle<{ onboarding_state: unknown; onboarded_at: string | null; settings?: unknown }>();
   if (error) throw new OnboardingError("db_error", error.message);
   if (!data) throw new OnboardingError("not_found", "Organização não encontrada.");
   return {
