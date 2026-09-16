@@ -37,6 +37,13 @@ import type { Idioma } from "./idiomas";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  "Liberar módulo de IA para esta organização": { es: "Habilitar el módulo de IA para esta organización" },
+  "Módulo de IA liberado.": { es: "Módulo de IA habilitado." },
+  "Módulo de IA bloqueado.": { es: "Módulo de IA bloqueado." },
+  "Não foi possível atualizar o módulo de IA.": { es: "No se pudo actualizar el módulo de IA." },
+  "Bloquear módulo de IA": { es: "Bloquear el módulo de IA" },
+  "Liberar módulo de IA": { es: "Habilitar el módulo de IA" },
+  "O módulo de IA não está contratado para esta organização.": { es: "El módulo de IA no está contratado para esta organización." },
   "Versão publicada": { es: "Versión publicada" },
   "Publicado em": { es: "Publicado el" },
   "Nenhum agente publicado": { es: "Ningún agente publicado" },

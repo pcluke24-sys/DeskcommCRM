@@ -4,6 +4,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TestarClient } from "./_client";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { loadOnboardingState } from "@/app/actions/onboarding/_shared";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,8 @@ export default async function TestarPage() {
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/login");
+  const { aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId, true);
+  if (!aiModuleEnabled) redirect("/onboarding");
   const idioma = user.idioma;
 
   const admin = createAdminClient();
@@ -36,7 +39,9 @@ export default async function TestarPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-semibold tracking-tight">{traduzir("Veja ele atender", idioma)}</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">
+          {traduzir("Veja ele atender", idioma)}
+        </h2>
         <p className="text-sm text-muted-foreground">
           {traduzir(
             "Escreva como se fosse um cliente. Nada é enviado pelo WhatsApp — é só um ensaio, entre você e ele.",

@@ -39,7 +39,13 @@ function rotuloDoGrupo(groupBy: AgrupamentoDeAtribuicao, key: string) {
     utm_campaign: "Sem UTM campaign",
     ad_reference: "Sem referência de anúncio",
   };
-  if (key === "sem_origem" || key === "sem_utm_source" || key === "sem_utm_campaign" || key === "sem_referencia_de_anuncio") return semValor[groupBy];
+  if (
+    key === "sem_origem" ||
+    key === "sem_utm_source" ||
+    key === "sem_utm_campaign" ||
+    key === "sem_referencia_de_anuncio"
+  )
+    return semValor[groupBy];
   return key;
 }
 function dataLocal(d: Date): string {
@@ -81,7 +87,15 @@ export function HistoricoClient() {
   const dados = consulta.data?.data;
   const report = dados?.report;
   const atribuicaoConsulta = useQuery({
-    queryKey: ["reports", "funnel-attribution", de, ate, pipelineId, dados?.pipeline?.id, agrupamento],
+    queryKey: [
+      "reports",
+      "funnel-attribution",
+      de,
+      ate,
+      pipelineId,
+      dados?.pipeline?.id,
+      agrupamento,
+    ],
     enabled: !!periodo && visao === "atribuicao",
     queryFn: () =>
       apiClient.get<{ data: RespostaAtribuicao }>(
@@ -103,10 +117,7 @@ export function HistoricoClient() {
           ? csvDoFunil(report, dados.pipeline.name, dados.window.from, dados.window.to)
           : null;
     if (!conteudo) return;
-    const blob = new Blob(
-      [conteudo],
-      { type: "text/csv;charset=utf-8" },
-    );
+    const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -117,15 +128,15 @@ export function HistoricoClient() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="space-y-1 text-sm">
+        <label className="block space-y-1 text-sm">
           De
           <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} />
         </label>
-        <label className="space-y-1 text-sm">
+        <label className="block space-y-1 text-sm">
           Até (inclusive)
           <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
         </label>
-        <label className="space-y-1 text-sm">
+        <label className="block space-y-1 text-sm">
           Funil
           <select
             aria-label="Funil"
@@ -167,10 +178,16 @@ export function HistoricoClient() {
         366 dias. Entradas repetidas contam uma vez por lead em cada etapa.
       </p>
       <div className="flex flex-wrap items-center gap-2" aria-label="Tipo de relatório">
-        <Button variant={visao === "etapas" ? "default" : "outline"} onClick={() => setVisao("etapas")}>
+        <Button
+          variant={visao === "etapas" ? "default" : "outline"}
+          onClick={() => setVisao("etapas")}
+        >
           Por etapas
         </Button>
-        <Button variant={visao === "atribuicao" ? "default" : "outline"} onClick={() => setVisao("atribuicao")}>
+        <Button
+          variant={visao === "atribuicao" ? "default" : "outline"}
+          onClick={() => setVisao("atribuicao")}
+        >
           Por origem e campanhas
         </Button>
         {visao === "atribuicao" && (
@@ -183,7 +200,9 @@ export function HistoricoClient() {
               onChange={(e) => setAgrupamento(e.target.value as AgrupamentoDeAtribuicao)}
             >
               {Object.entries(nomesDosAgrupamentos).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+                <option key={value} value={value}>
+                  {label}
+                </option>
               ))}
             </select>
           </label>
@@ -303,7 +322,9 @@ export function HistoricoClient() {
                       <th className="p-3 whitespace-nowrap">Título recebido</th>
                     )}
                     {attribution.stages.map((stage) => (
-                      <th key={stage.id} className="p-3 whitespace-nowrap">{stage.name}</th>
+                      <th key={stage.id} className="p-3 whitespace-nowrap">
+                        {stage.name}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -311,9 +332,13 @@ export function HistoricoClient() {
                   {attribution.groups.map((group) => (
                     <tr key={group.key} className="border-t">
                       <td className="p-3 font-medium">{rotuloDoGrupo(agrupamento, group.key)}</td>
-                      {agrupamento === "ad_reference" && <td className="p-3">{group.ad_title ?? "—"}</td>}
+                      {agrupamento === "ad_reference" && (
+                        <td className="p-3">{group.ad_title ?? "—"}</td>
+                      )}
                       {attribution.stages.map((stage) => (
-                        <td key={stage.id} className="p-3">{group.stage_counts[stage.id] ?? 0}</td>
+                        <td key={stage.id} className="p-3">
+                          {group.stage_counts[stage.id] ?? 0}
+                        </td>
                       ))}
                     </tr>
                   ))}

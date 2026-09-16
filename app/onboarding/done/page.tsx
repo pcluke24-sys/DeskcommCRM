@@ -13,7 +13,7 @@ export default async function DonePage() {
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/login");
 
-  const { state, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId);
+  const { state, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId, true);
 
   // O resumo sai da MESMA fonte que decidiu a ordem e desenhou o indicador.
   // Antes era uma terceira lista, fixa, e por isso ela listava "Loja Nuvemshop
@@ -24,5 +24,5 @@ export default async function DonePage() {
     iaLiberada: aiModuleEnabled,
   });
 
-  return <DoneClient itens={itens} pecas={oQueMaisExiste()} />;
+  return <DoneClient itens={itens} pecas={aiModuleEnabled ? oQueMaisExiste() : []} />;
 }

@@ -21,7 +21,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
   // é a tela que CRIA a organização que falta.
   if (!activeOrg) redirect("/get-started");
 
-  const { state, onboardedAt, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId);
+  const { state, onboardedAt, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId, true);
   if (onboardedAt) redirect("/app/inbox");
 
   // Os passos que ESTA instalação oferece, com o que já foi resolvido. O

@@ -20,7 +20,7 @@ export default async function OnboardingIndex() {
   // é a tela que CRIA a organização que falta.
   if (!activeOrg) redirect("/get-started");
 
-  const { state, onboardedAt, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId);
+  const { state, onboardedAt, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId, true);
   if (onboardedAt) redirect("/app/inbox");
 
   const passo = proximoPasso(state, {
