@@ -505,6 +505,15 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    href: "/app/funnel-history",
+    label: "Histórico do funil",
+    description: "Leads que passaram por cada etapa no período, taxas de avanço e exportação CSV.",
+    icon: "ChartBar",
+    group: "analise",
+    section: "Os números do período",
+    sidebar: false,
+  },
+  {
     // Irmã de "Desempenho", não a mesma coisa: lá é DESFECHO (funil agora,
     // ganho/perdido por atendente); aqui é o TRABALHO que aconteceu no
     // período, com quem fez cada coisa. Um mês inteiro atendido pela IA e um

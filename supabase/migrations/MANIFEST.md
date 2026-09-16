@@ -1,5 +1,9 @@
 # Migration Manifest — DeskcommCRM
 
+| Timestamp | Migration adicional do fork | Finalidade |
+| --- | --- | --- |
+| `20260916140000` | `0261_historico_do_funil` | Registro prospectivo de entradas e desfechos; agregação por período com RLS e sem backfill. |
+
 Migrations applied to Supabase project `rrydmwnporysaiysiztn` (sa-east-1, Postgres 17) via Supabase MCP on 2026-04-28.
 
 ## Nota — renomeação de 4 prefixos em 2026-08-05 (issue #143)

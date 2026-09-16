@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Histórico prospectivo do funil",
+    "subtitle": "Movimentação no período, sem backfill",
+    "output": "historico-do-funil.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "db", "label": "Banco" },
+    { "id": "ui", "label": "Leitura" }
+  ],
+  "mainPath": ["leads", "ledger", "rpc", "page", "csv"],
+  "nodes": [
+    {
+      "id": "leads",
+      "lane": "db",
+      "col": 1,
+      "type": "database",
+      "label": "crm_leads",
+      "sublabel": "criação, etapa e desfecho"
+    },
+    {
+      "id": "ledger",
+      "lane": "db",
+      "col": 2,
+      "type": "database",
+      "label": "crm_funnel_entries",
+      "sublabel": "trigger prospectivo; RLS via visibilidade do lead"
+    },
+    {
+      "id": "rpc",
+      "lane": "db",
+      "col": 3,
+      "type": "database",
+      "label": "fn_funnel_history",
+      "sublabel": "agregados completos, janela [from,to)"
+    },
+    {
+      "id": "page",
+      "lane": "ui",
+      "col": 1,
+      "type": "frontend",
+      "label": "/app/funnel-history",
+      "sublabel": "hub Análise, filtros, erro visível e Atualizar"
+    },
+    {
+      "id": "csv",
+      "lane": "ui",
+      "col": 2,
+      "type": "frontend",
+      "label": "CSV agregado",
+      "sublabel": "sem dados pessoais; fórmulas neutralizadas"
+    },
+    {
+      "id": "kanban",
+      "lane": "ui",
+      "col": 3,
+      "type": "frontend",
+      "label": "/app/kanban",
+      "sublabel": "ação humana sobre os gargalos"
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from": "leads", "to": "ledger", "label": "registro transacional, sem HTTP" },
+    { "id": "e2", "from": "ledger", "to": "rpc", "label": "entradas, únicos, avanço e desfecho" },
+    { "id": "e3", "from": "rpc", "to": "page", "label": "API com sessão e empresa ativa" },
+    { "id": "e4", "from": "page", "to": "csv", "label": "baixar com a mesma régua" },
+    { "id": "e5", "from": "page", "to": "kanban", "label": "acompanhar e agir" },
+    { "id": "e6", "from": "kanban", "to": "leads", "label": "operador ou agente avança" }
+  ]
+}
