@@ -55,6 +55,7 @@ export function TenantOverviewClient({ id }: TenantOverviewClientProps) {
           status={organization.status}
           displayName={organization.display_name}
           aiModuleEnabled={organization.settings?.ai_module_enabled !== false}
+          onboardedAt={organization.onboarded_at}
         />
       </div>
     </div>

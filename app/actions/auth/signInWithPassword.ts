@@ -104,5 +104,5 @@ export async function signInWithPassword(input: LoginInput, next?: string): Prom
   });
 
   // Server-side redirect ensures fresh session cookie is sent to browser.
-  redirect(safeNext(next, "/app"));
+  redirect(safeNext(next, data.user.user_metadata?.invite_token ? "/auth/complete-invite" : "/app"));
 }

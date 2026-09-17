@@ -6,7 +6,9 @@ import { Stepper } from "./_components/Stepper";
 import { OutrasOrganizacoes } from "./_components/OutrasOrganizacoes";
 import { SkipToEnd } from "./_components/SkipToEnd";
 import { SimboloDoProduto } from "@/components/branding/MarcaDoProduto";
-import { branding, marcaEhADoProduto } from "@/lib/branding";
+import { resolveBranding, marcaEhADoProduto } from "@/lib/branding";
+import { marcaDaSaida } from "@/lib/branding/saida";
+import { podeConfigurarOrganizacao } from "@/lib/onboarding/acesso";
 import { passosVisiveis } from "@/lib/onboarding/passos";
 import { env } from "@/lib/env";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
@@ -20,9 +22,11 @@ export default async function OnboardingLayout({ children }: { children: React.R
   // `/login` fechava o círculo: quem entrasse de novo voltaria para cá. A saída
   // é a tela que CRIA a organização que falta.
   if (!activeOrg) redirect("/get-started");
+  if (!podeConfigurarOrganizacao(activeOrg.role)) redirect("/app");
 
-  const { state, onboardedAt, aiModuleEnabled } = await loadOnboardingState(activeOrg.orgId, true);
+  const { state, onboardedAt, aiModuleEnabled, setupMode } = await loadOnboardingState(activeOrg.orgId, true);
   if (onboardedAt) redirect("/app/inbox");
+  if (setupMode === "agency" && !user.is_platform_admin) redirect("/app");
 
   // Os passos que ESTA instalação oferece, com o que já foi resolvido. O
   // indicador não decide mais nada sozinho — ele desenha o que recebe.
@@ -36,7 +40,8 @@ export default async function OnboardingLayout({ children }: { children: React.R
   }));
 
   const isDev = process.env.NODE_ENV !== "production";
-  const marca = branding();
+  const resolved = await marcaDaSaida(activeOrg.orgId);
+  const marca = resolveBranding(resolved.nome, resolved.logoUrl);
 
   return (
     <IdiomaProvider locale={user.locale}>

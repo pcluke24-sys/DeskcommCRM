@@ -11,6 +11,7 @@ import { apiClient } from "@/lib/api/client";
 // ---------------------------------------------------------------------------
 
 export interface CreateTenantPayload {
+  setup_mode?: "client" | "agency";
   display_name: string;
   slug: string;
   legal_name?: string;

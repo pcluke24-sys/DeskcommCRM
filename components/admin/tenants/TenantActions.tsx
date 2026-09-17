@@ -17,6 +17,7 @@ interface TenantActionsProps {
   status: "active" | "suspended" | "redacted";
   displayName: string;
   aiModuleEnabled: boolean;
+  onboardedAt?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -28,12 +29,24 @@ export function TenantActions({
   status,
   displayName,
   aiModuleEnabled,
+  onboardedAt,
 }: TenantActionsProps) {
   const t = useT();
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(aiModuleEnabled);
   const [savingAi, setSavingAi] = useState(false);
+  const [completed, setCompleted] = useState(!!onboardedAt);
+  const [savingSetup, setSavingSetup] = useState(false);
+  async function completeSetup() {
+    setSavingSetup(true);
+    try {
+      await apiClient.patch(`/api/v1/admin/tenants/${organizationId}`, { onboarding_complete: true });
+      setCompleted(true);
+      toast.success(t("Implantação concluída. O cliente já pode acessar o CRM."));
+    } catch { toast.error(t("Não foi possível concluir a implantação.")); }
+    finally { setSavingSetup(false); }
+  }
   async function toggleAi() {
     setSavingAi(true);
     try {
@@ -68,6 +81,14 @@ export function TenantActions({
         <Button className="w-full" variant={aiEnabled ? "outline" : "default"} disabled={isRedacted || savingAi} onClick={toggleAi}>
           {aiEnabled ? t("Bloquear módulo de IA") : t("Liberar módulo de IA")}
         </Button>
+        {!completed && status === "active" && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">{t("Configure a organização pelo acompanhamento ou pelo seletor de organizações. Depois marque a implantação como concluída.")}</p>
+            <Button className="w-full" variant="outline" disabled={savingSetup} onClick={completeSetup}>
+              {t("Concluir implantação")}
+            </Button>
+          </div>
+        )}
 
         {/* Suspend */}
         {canSuspend && (

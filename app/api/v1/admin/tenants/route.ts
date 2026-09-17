@@ -220,6 +220,7 @@ export async function POST(req: NextRequest) {
         settings: {
           ...((createdSettings?.settings as Record<string, unknown> | null) ?? {}),
           ai_module_enabled: request.ai_module_enabled,
+          setup_mode: request.setup_mode,
         },
       })
       .eq("id", org.id);
@@ -248,6 +249,17 @@ export async function POST(req: NextRequest) {
       },
     });
   }
+  if (org.created && request.owner_email !== adminCtx.user.email?.trim().toLowerCase()) {
+    const { error: invitationError } = await admin.from("team_invites").insert({
+      id: org.invite_id, organization_id: org.id, email: request.owner_email, role: "admin",
+      interface_settings: request.owner_interface_settings ?? { preset: "completa" },
+      invited_by: adminCtx.user.id,
+      inviter_name: adminCtx.user.user_metadata?.full_name ?? "Administrador",
+      last_sent_at: new Date(org.issued_at * 1000).toISOString(),
+      expires_at: new Date((org.issued_at + 86400) * 1000).toISOString(),
+    });
+    if (invitationError) return fail("internal_error", "Organização criada, mas não foi possível registrar o convite do responsável. Reenvie pela equipe.", 500, { requestId });
+  }
   const ownerInvitation =
     request.owner_email === adminCtx.user.email?.trim().toLowerCase()
       ? null
@@ -265,6 +277,8 @@ export async function POST(req: NextRequest) {
           issuedAt: org.issued_at,
           dispatch: org.created,
         });
+  if (ownerInvitation) await admin.from("team_invites").update({ email_dispatched: ownerInvitation.email_dispatched })
+    .eq("organization_id", org.id).eq("id", org.invite_id).is("accepted_at", null).is("revoked_at", null);
   return ok(
     {
       id: org.id,

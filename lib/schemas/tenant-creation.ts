@@ -13,6 +13,7 @@ export const tenantCreationFields = {
   cnpj: z.string().max(18).optional(),
   plan: z.enum(["standard", "pro", "enterprise"]),
   ai_module_enabled: z.boolean().default(false),
+  setup_mode: z.enum(["client", "agency"]).default("client"),
   owner_interface_settings: interfaceSettingsSchema.optional(),
   owner_email: z.string().trim().email(),
 };

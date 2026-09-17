@@ -5,6 +5,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { mfaEmDivida } from "@/lib/auth/server";
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/admin/tenants/[id]
@@ -170,17 +171,23 @@ export async function PATCH(
   try { adminCtx = await requirePlatformAdmin(); } catch {
     return fail("forbidden", "Platform admin required", 403, { requestId });
   }
+  if (adminCtx.platformAdmin.scope !== "full") return fail("forbidden", "Acesso somente leitura", 403, { requestId });
+  if (await mfaEmDivida()) return fail("mfa_required", "Confirme a verificação em duas etapas", 403, { requestId });
   const body = await req.json().catch(() => null);
-  const parsed = z.object({ ai_module_enabled: z.boolean() }).safeParse(body);
-  if (!parsed.success) return fail("validation_error", "Campo ai_module_enabled inválido", 400, { requestId });
+  const parsed = z.object({ ai_module_enabled: z.boolean().optional(), onboarding_complete: z.literal(true).optional() })
+    .refine(v => v.ai_module_enabled !== undefined || v.onboarding_complete === true).safeParse(body);
+  if (!parsed.success) return fail("validation_error", "Configuração inválida", 400, { requestId });
   const { id } = await params;
+  if (!z.string().uuid().safeParse(id).success) return fail("validation_error", "ID inválido", 400, { requestId });
   const admin = createAdminClient();
-  const { data: org } = await admin.from("organizations").select("settings").eq("id", id).maybeSingle();
+  const { data: org } = await admin.from("organizations").select("settings, onboarded_at, status").eq("id", id).maybeSingle();
   if (!org) return fail("not_found", "Tenant not found", 404, { requestId });
+  if (org.status !== "active") return fail("conflict", "Organização não está ativa", 409, { requestId });
   const { error } = await admin.from("organizations").update({
-    settings: { ...((org.settings as Record<string, unknown> | null) ?? {}), ai_module_enabled: parsed.data.ai_module_enabled },
+    ...(parsed.data.ai_module_enabled !== undefined ? { settings: { ...((org.settings as Record<string, unknown> | null) ?? {}), ai_module_enabled: parsed.data.ai_module_enabled } } : {}),
+    ...(parsed.data.onboarding_complete ? { onboarded_at: org.onboarded_at ?? new Date().toISOString() } : {}),
   }).eq("id", id);
   if (error) return fail("internal_error", "Não foi possível atualizar o módulo de IA", 500, { requestId });
-  await audit({ action: "tenant.ai_module_updated", actorUserId: adminCtx.user.id, actingAsPlatformAdmin: true, bypassedRls: true, organizationId: id, resourceType: "organization", resourceId: id, requestId, metadata: parsed.data });
-  return ok({ ai_module_enabled: parsed.data.ai_module_enabled }, { requestId });
+  await audit({ action: parsed.data.onboarding_complete ? "onboarding.completed" : "tenant.ai_module_updated", actorUserId: adminCtx.user.id, actingAsPlatformAdmin: true, bypassedRls: true, organizationId: id, resourceType: "organization", resourceId: id, requestId, metadata: parsed.data });
+  return ok(parsed.data, { requestId });
 }
