@@ -40,6 +40,17 @@ integração futura exige revisão de ambos os históricos, sem sobrescrever mig
 
 ## Verificação e publicação — 17/09/2026
 
+Correção posterior publicada: runtime 756ca98b37e70d844f853132ba8a58c1c06ffbfc,
+checkout remoto 95f19a4f, Actions 35233615426 aprovado. Migration 0266 aplicada
+isoladamente, Bee Agency Ads marcada principal pela RPC auditada; RST continua
+suspensa e não principal. Nenhum tenant excluído. Domínio HTTP 307 e três serviços
+saudáveis. Backup: /root/DeskcommCRM/backups/primary-organization-20260917T164418Z.
+Tipos e lint dos arquivos alterados aprovados; 14 testes API/segurança e 149
+casos UI/arquitetura aprovados. Prova DB com rollback verifica principal/FK,
+associação do dono a cliente não bloqueante, isolamento e auditoria.
+Conferência visual de produção pendente: Edge bloqueou página ERR_BLOCKED_BY_CLIENT;
+nenhuma barreira contornada. Suíte integral/fresh Docker/e2e não rodada nesta correção.
+
 Runtime publicado: 5365fd19db251e9fb9451e622972b7e0691f7c4b. GitHub Actions
 35227876788 aprovou as três imagens, boot do aplicativo e imagens-ok. Commit
 2ed923a2 posterior altera somente o comentário ESLint do script operacional.
