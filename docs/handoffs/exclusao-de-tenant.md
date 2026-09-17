@@ -29,3 +29,27 @@ Atualização 1.31.1 NÃO aplicada: comparação merge-tree encontrou conflitos 
 layout autenticado, ConversationHeader, KanbanCardActions, dicionário e mapa de jornadas.
 Também há números 0261/0262 de migrations upstream usados por nossos relatórios;
 integração futura exige revisão de ambos os históricos, sem sobrescrever migrations.
+
+## Verificação e publicação — 17/09/2026
+
+Runtime publicado: 5365fd19db251e9fb9451e622972b7e0691f7c4b. GitHub Actions
+35227876788 aprovou as três imagens, boot do aplicativo e imagens-ok. Commit
+2ed923a2 posterior altera somente o comentário ESLint do script operacional.
+VPS: app/worker/scheduler saudáveis; domínio público HTTP 307 após deploy.
+Backup protegido do banco, sessões WhatsApp, env e compose:
+/root/DeskcommCRM/backups/tenant-deletion-20260917T134153Z.
+Checkout remoto preserva compose personalizado e incorpora o commit como 38bd5e58.
+
+Prova real transacional com rollback: dono exclusivo, suspensão, slug, organização
+própria, conexão pendente, cascade em contatos/leads, segundo tenant intacto,
+usuários Auth preservados, fila de arquivos somente do prefixo alvo, auditoria e
+RPC não executável por authenticated. Migration reaplicada duas vezes.
+Tipos aprovados; 196 casos focados aprovados ao combinar arquitetura, diálogo,
+API, branding, auditoria e filtros do cliente admin. lint:channels aprovado.
+Varredura do cliente admin repetida isoladamente após timeout sob carga.
+
+Browser real: conta do dono vê Excluir tenant definitivamente no tenant já suspenso;
+diálogo exibe riscos, exige slug e motivo, confirmação inicialmente desabilitada.
+Teste cancelado; nenhum tenant real foi excluído.
+Suíte unitária integral interrompida após timeout de encerramento de worker sob
+carga; NÃO tratada como aprovada. Instalação fresca Docker local não executada.
