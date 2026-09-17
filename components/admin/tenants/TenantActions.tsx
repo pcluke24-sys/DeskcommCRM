@@ -8,6 +8,17 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import { DeleteTenantDialog } from "./DeleteTenantDialog";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -21,6 +32,7 @@ interface TenantActionsProps {
   onboardedAt?: string | null;
   slug?: string;
   canDeleteTenant?: boolean;
+  primaryOrganizationId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -35,8 +47,28 @@ export function TenantActions({
   onboardedAt,
   slug,
   canDeleteTenant = false,
+  primaryOrganizationId = null,
 }: TenantActionsProps) {
   const t = useT();
+  const queryClient = useQueryClient();
+  const [primaryOpen, setPrimaryOpen] = useState(false);
+  const [savingPrimary, setSavingPrimary] = useState(false);
+  const isPrimary = primaryOrganizationId === organizationId;
+  async function setPrimary() {
+    setSavingPrimary(true);
+    try {
+      await apiClient.put(`/api/v1/admin/tenants/${organizationId}/primary`, {
+        confirmation: true,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "tenant"] });
+      setPrimaryOpen(false);
+      toast.success("Organização principal definida e protegida contra exclusão.");
+    } catch {
+      toast.error("Não foi possível definir a organização principal.");
+    } finally {
+      setSavingPrimary(false);
+    }
+  }
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [reactivateOpen, setReactivateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -117,6 +149,22 @@ export function TenantActions({
         )}
 
         {/* Suspend */}
+        {canDeleteTenant && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              {isPrimary
+                ? "Sua organização principal — protegida contra exclusão."
+                : !primaryOrganizationId
+                  ? "Defina sua organização principal antes de excluir qualquer tenant."
+                  : "Esta é uma organização de cliente, não a principal."}
+            </p>
+            {!isPrimary && status === "active" && (
+              <Button className="w-full" variant="outline" onClick={() => setPrimaryOpen(true)}>
+                Definir como minha organização principal
+              </Button>
+            )}
+          </div>
+        )}
         {canSuspend && (
           <Button
             className="w-full"
@@ -140,7 +188,7 @@ export function TenantActions({
           </Button>
         )}
 
-        {isSuspended && canDeleteTenant && slug && (
+        {isSuspended && canDeleteTenant && slug && primaryOrganizationId && !isPrimary && (
           <Button className="w-full" variant="destructive" onClick={() => setDeleteOpen(true)}>
             Excluir tenant definitivamente
           </Button>
@@ -151,6 +199,30 @@ export function TenantActions({
           </p>
         )}
       </div>
+
+      <AlertDialog open={primaryOpen} onOpenChange={setPrimaryOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Definir organização principal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {displayName} será sua única organização principal e não poderá ser excluída. Se já
+              houver outra principal, ela deixará de ter essa proteção. Nenhum dado será apagado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingPrimary}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={savingPrimary}
+              onClick={(event) => {
+                event.preventDefault();
+                void setPrimary();
+              }}
+            >
+              {savingPrimary ? "Salvando..." : "Confirmar organização principal"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {canDeleteTenant && slug && (
         <DeleteTenantDialog

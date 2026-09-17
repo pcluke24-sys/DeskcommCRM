@@ -16,6 +16,7 @@ async function main() {
     assert.ok(owner, "Dono original não encontrado; nenhuma exclusão autorizada");
     const a = randomUUID(), b = randomUUID(), outsider = randomUUID();
     for (const org of [a,b]) await db.query("insert into organizations(id,slug,legal_name,display_name) values($1,$2,'Teste transacional','Teste transacional')", [org, "test-" + org]);
+    await db.query("update platform_primary_organization set organization_id=null where id=1");
     for (const org of [a,b]) await db.query("insert into contacts(organization_id,name) values($1,'Contato fictício')", [org]);
     const loginCount = (await db.query("select count(*)::int as n from auth.users")).rows[0].n;
     for (const org of [a,b]) {
@@ -36,11 +37,18 @@ async function main() {
     await refused(outsider, "test-" + a, "42501");
     await refused(owner, "test-" + a, "P0001");
     await db.query("update organizations set status='suspended' where id=$1", [a]);
+    await refused(owner, "test-" + a, "P0001");
+    await db.query("select fn_set_primary_organization($1,$2,$3)", [b,owner,randomUUID()]);
     await refused(owner, "identificador-errado", "22023");
-    await db.query("savepoint self_org");
     await db.query("insert into user_organizations(user_id,organization_id,role,accepted_at) values($1,$2,'admin',now())", [owner,a]);
+    await db.query("savepoint self_org");
+    await db.query("update platform_primary_organization set organization_id=$1 where id=1", [a]);
     await refused(owner, "test-" + a, "P0001");
     await db.query("rollback to savepoint self_org");
+    await db.query("savepoint principal_fk");
+    try { await db.query("delete from organizations where id=$1", [b]); assert.fail("Principal apagada"); }
+    catch (err) { assert.equal(err.code, "23503"); }
+    await db.query("rollback to savepoint principal_fk");
     await db.query("savepoint connected");
     await db.query("insert into channel_sessions(organization_id,waha_session_name,webhook_secret_encrypted) values($1,$2,decode('01','hex'))", [a,"test-" + a]);
     await refused(owner, "test-" + a, "P0001");
@@ -57,6 +65,7 @@ async function main() {
     assert.equal((await db.query("select count(*)::int as n from platform_tenant_deletion_storage where deleted_organization_id=$1", [b])).rows[0].n, 0);
     assert.equal((await db.query("select count(*)::int as n from api_audit_log where action='tenant.deleted' and resource_id=$1", [a])).rows[0].n, 1);
     assert.equal((await db.query("select has_function_privilege('authenticated','public.fn_delete_suspended_tenant(uuid,uuid,text,text,uuid)','execute') as allowed")).rows[0].allowed, false);
+    assert.equal((await db.query("select has_function_privilege('authenticated','public.fn_set_primary_organization(uuid,uuid,uuid)','execute') as allowed")).rows[0].allowed, false);
     console.log("PASS: migration idempotente, dono exclusivo, suspensão, confirmação, cascade, isolamento e auditoria. Tudo revertido.");
   } finally { await db.query("rollback"); await db.end(); }
 }
