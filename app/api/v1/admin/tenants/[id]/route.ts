@@ -11,10 +11,7 @@ import { mfaEmDivida } from "@/lib/auth/server";
 // GET /api/v1/admin/tenants/[id]
 // ---------------------------------------------------------------------------
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const requestId = randomUUID();
   const { id } = await params;
 
@@ -71,18 +68,9 @@ export async function GET(
       .from("conversations")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", id),
-    admin
-      .from("messages")
-      .select("*", { count: "exact", head: true })
-      .eq("organization_id", id),
-    admin
-      .from("crm_leads")
-      .select("*", { count: "exact", head: true })
-      .eq("organization_id", id),
-    admin
-      .from("orders")
-      .select("*", { count: "exact", head: true })
-      .eq("organization_id", id),
+    admin.from("messages").select("*", { count: "exact", head: true }).eq("organization_id", id),
+    admin.from("crm_leads").select("*", { count: "exact", head: true }).eq("organization_id", id),
+    admin.from("orders").select("*", { count: "exact", head: true }).eq("organization_id", id),
     admin
       .from("lgpd_requests")
       .select("*", { count: "exact", head: true })
@@ -104,10 +92,7 @@ export async function GET(
       .from("llm_calls")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", id)
-      .gte(
-        "created_at",
-        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      ),
+      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
     admin
       .from("channel_sessions")
       .select("*", { count: "exact", head: true })
@@ -134,9 +119,7 @@ export async function GET(
   };
 
   const nuvemshopIntegration =
-    integrationRes.data && integrationRes.data.length > 0
-      ? integrationRes.data[0]
-      : null;
+    integrationRes.data && integrationRes.data.length > 0 ? integrationRes.data[0] : null;
 
   const integrations = {
     nuvemshop_status: nuvemshopIntegration?.status ?? null,
@@ -158,36 +141,83 @@ export async function GET(
     metadata: { tenant_slug: org.slug },
   });
 
-  return ok({ organization: org, counts, integrations }, { requestId });
+  const { data: deletionOwner, error: deletionError } = await admin.rpc(
+    "fn_tenant_deletion_owner",
+    { p_actor: adminCtx.user.id },
+  );
+  return ok(
+    {
+      organization: org,
+      counts,
+      integrations,
+      can_delete_tenant: !deletionError && deletionOwner === true,
+    },
+    { requestId },
+  );
 }
 
 /** Liga/desliga o módulo comercial de IA. Somente a plataforma decide isso. */
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const requestId = randomUUID();
   let adminCtx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
-  try { adminCtx = await requirePlatformAdmin(); } catch {
+  try {
+    adminCtx = await requirePlatformAdmin();
+  } catch {
     return fail("forbidden", "Platform admin required", 403, { requestId });
   }
-  if (adminCtx.platformAdmin.scope !== "full") return fail("forbidden", "Acesso somente leitura", 403, { requestId });
-  if (await mfaEmDivida()) return fail("mfa_required", "Confirme a verificação em duas etapas", 403, { requestId });
+  if (adminCtx.platformAdmin.scope !== "full")
+    return fail("forbidden", "Acesso somente leitura", 403, { requestId });
+  if (await mfaEmDivida())
+    return fail("mfa_required", "Confirme a verificação em duas etapas", 403, { requestId });
   const body = await req.json().catch(() => null);
-  const parsed = z.object({ ai_module_enabled: z.boolean().optional(), onboarding_complete: z.literal(true).optional() })
-    .refine(v => v.ai_module_enabled !== undefined || v.onboarding_complete === true).safeParse(body);
+  const parsed = z
+    .object({
+      ai_module_enabled: z.boolean().optional(),
+      onboarding_complete: z.literal(true).optional(),
+    })
+    .refine((v) => v.ai_module_enabled !== undefined || v.onboarding_complete === true)
+    .safeParse(body);
   if (!parsed.success) return fail("validation_error", "Configuração inválida", 400, { requestId });
   const { id } = await params;
-  if (!z.string().uuid().safeParse(id).success) return fail("validation_error", "ID inválido", 400, { requestId });
+  if (!z.string().uuid().safeParse(id).success)
+    return fail("validation_error", "ID inválido", 400, { requestId });
   const admin = createAdminClient();
-  const { data: org } = await admin.from("organizations").select("settings, onboarded_at, status").eq("id", id).maybeSingle();
+  const { data: org } = await admin
+    .from("organizations")
+    .select("settings, onboarded_at, status")
+    .eq("id", id)
+    .maybeSingle();
   if (!org) return fail("not_found", "Tenant not found", 404, { requestId });
-  if (org.status !== "active") return fail("conflict", "Organização não está ativa", 409, { requestId });
-  const { error } = await admin.from("organizations").update({
-    ...(parsed.data.ai_module_enabled !== undefined ? { settings: { ...((org.settings as Record<string, unknown> | null) ?? {}), ai_module_enabled: parsed.data.ai_module_enabled } } : {}),
-    ...(parsed.data.onboarding_complete ? { onboarded_at: org.onboarded_at ?? new Date().toISOString() } : {}),
-  }).eq("id", id);
-  if (error) return fail("internal_error", "Não foi possível atualizar o módulo de IA", 500, { requestId });
-  await audit({ action: parsed.data.onboarding_complete ? "onboarding.completed" : "tenant.ai_module_updated", actorUserId: adminCtx.user.id, actingAsPlatformAdmin: true, bypassedRls: true, organizationId: id, resourceType: "organization", resourceId: id, requestId, metadata: parsed.data });
+  if (org.status !== "active")
+    return fail("conflict", "Organização não está ativa", 409, { requestId });
+  const { error } = await admin
+    .from("organizations")
+    .update({
+      ...(parsed.data.ai_module_enabled !== undefined
+        ? {
+            settings: {
+              ...((org.settings as Record<string, unknown> | null) ?? {}),
+              ai_module_enabled: parsed.data.ai_module_enabled,
+            },
+          }
+        : {}),
+      ...(parsed.data.onboarding_complete
+        ? { onboarded_at: org.onboarded_at ?? new Date().toISOString() }
+        : {}),
+    })
+    .eq("id", id);
+  if (error)
+    return fail("internal_error", "Não foi possível atualizar o módulo de IA", 500, { requestId });
+  await audit({
+    action: parsed.data.onboarding_complete ? "onboarding.completed" : "tenant.ai_module_updated",
+    actorUserId: adminCtx.user.id,
+    actingAsPlatformAdmin: true,
+    bypassedRls: true,
+    organizationId: id,
+    resourceType: "organization",
+    resourceId: id,
+    requestId,
+    metadata: parsed.data,
+  });
   return ok(parsed.data, { requestId });
 }
