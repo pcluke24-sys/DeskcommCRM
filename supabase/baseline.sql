@@ -27410,7 +27410,8 @@ create table if not exists public.platform_primary_organization (
   updated_at timestamptz not null default now()
 );
 alter table public.platform_primary_organization enable row level security;
-revoke all on public.platform_primary_organization from public, anon, authenticated;
+-- Migration 9005: também fecha grants herdados por service_role.
+revoke all on public.platform_primary_organization from public, anon, authenticated, service_role;
 grant select on public.platform_primary_organization to service_role;
 insert into public.platform_primary_organization(id) values(1) on conflict(id) do nothing;
 

@@ -2,6 +2,7 @@
 
 | Timestamp | Migration adicional do fork | Finalidade |
 | --- | --- | --- |
+| `20260917223000` | `9005_principal_somente_por_rpc` | Revoga escrita service_role herdada por default privileges; mantém leitura e escrita pelas RPCs auditadas. |
 | `20260917180000` | `9004_organizacao_principal` | Antiga 0266; timestamp e SQL preservados. Principal única escolhida pelo dono; proteção por FK e RPC serializada. |
 | `20260917170000` | `9003_excluir_tenant_suspenso` | Antiga 0265; timestamp e SQL preservados. Exclusão de tenant suspenso somente pelo dono, com fila isolada de arquivos. |
 | `20260916140000` | `9001_historico_do_funil` | Antiga 0261; timestamp e SQL preservados. Histórico prospectivo isolado por organização, sem backfill. |
