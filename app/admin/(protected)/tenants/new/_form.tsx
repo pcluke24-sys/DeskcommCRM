@@ -87,6 +87,7 @@ export function NewTenantForm() {
       cnpj: "",
       plan: "standard",
       ai_module_enabled: false,
+      setup_mode: "client",
       owner_email: "",
     },
   });
@@ -125,6 +126,7 @@ export function NewTenantForm() {
         cnpj: values.cnpj || undefined,
         plan: values.plan,
         ai_module_enabled: values.ai_module_enabled,
+        setup_mode: values.setup_mode,
         owner_email: values.owner_email,
         owner_interface_settings: ownerInterface,
       });
@@ -302,6 +304,13 @@ export function NewTenantForm() {
             </div>
 
             {/* owner_email */}
+            <div className="space-y-1.5">
+              <Label htmlFor="setup_mode">{t("Quem fará a implantação?")}</Label>
+              <select id="setup_mode" className="w-full rounded-md border bg-background p-2" {...register("setup_mode")}>
+                <option value="client">{t("O administrador do cliente no primeiro acesso")}</option>
+                <option value="agency">{t("Minha agência entrega o CRM configurado")}</option>
+              </select>
+            </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" {...register("ai_module_enabled")} />
               {t("Liberar módulo de IA para esta organização")}

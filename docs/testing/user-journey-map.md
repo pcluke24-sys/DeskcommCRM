@@ -10,6 +10,10 @@
 
 ## Convenções
 
+### Primeiro acesso de convidados — correção do fork
+
+[P0] E-mail confirmado sem membership: /auth/complete-invite retoma token validado; role agent/viewer entra em /app, admin/manager recebe implantação somente no modo client. Modo agency permite preparar e concluir pelo painel da plataforma. Cookies PKCE separados dos cookies Strict da sessão. Cobertura unitária em app/auth/complete-invite/route.test.ts, lib/onboarding/acesso.test.ts e lib/supabase/auth-cookie.test.ts. Prova de e-mail real e dispositivo diferente permanece distinta dos testes unitários.
+
 - `[P0]` primeira impressão — bug aqui é vergonha pública; prioridade máxima.
 - `[P1]` rotina diária do operador/atendente.
 - `[P2]` exploração/edge.

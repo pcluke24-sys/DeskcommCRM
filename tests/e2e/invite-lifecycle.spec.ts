@@ -549,6 +549,44 @@ test.describe("ciclo de vida do convite (ponta a ponta + adversarial)", () => {
 });
 
 // helper: extrai só o path (relativo) do accept_url absoluto pro page.goto
+for (const role of ["admin", "manager", "agent", "viewer"] as const) {
+  test(`primeiro acesso confirmado sem vínculo: ${role} chega ao destino correto`, async ({ page }) => {
+    const suffix = randomUUID();
+    const email = `first-${suffix}@invariant.test`;
+    const { data: org, error: orgError } = await svc.from("organizations").insert({
+      slug: `first-${suffix}`, display_name: "Primeiro acesso QA", legal_name: "Primeiro acesso QA", status: "active",
+    }).select("id").single();
+    if (orgError || !org) throw orgError ?? new Error("org missing");
+    let userId: string | undefined;
+    try {
+      const inviteToken = signInviteToken({ invite_id: randomUUID(), email, organization_id: org.id,
+        role, exp: Math.floor(Date.now()/1000)+3600, iat: Math.floor(Date.now()/1000) });
+      const { data, error } = await svc.auth.admin.createUser({email, password: base.password, email_confirm: true,
+        user_metadata: { invite_token: inviteToken, full_name: "Primeiro acesso QA" }});
+      if (error || !data.user) throw error ?? new Error("user missing");
+      userId = data.user.id;
+      await page.goto("/login");
+      await page.locator("#email").fill(email);
+      await page.locator("#password").fill(base.password);
+      await page.getByRole("button", {name:/entrar/i}).click();
+      const setup = role === "admin" || role === "manager";
+      await page.waitForURL(setup ? /\/onboarding\// : /\/app\//, {timeout:60_000});
+      if (!setup) {
+        await expect(page.getByRole("link", {name:"Inbox",exact:true})).toBeVisible();
+        await page.goto("/onboarding/welcome");
+        await page.waitForURL(/\/app\//);
+      } else {
+        await expect(page.getByRole("heading", {name:/Boas-vindas ao/i})).toBeVisible();
+      }
+      const { data: members } = await svc.from("user_organizations").select("role").eq("organization_id",org.id).eq("user_id",userId);
+      expect(members).toEqual([{role}]);
+    } finally {
+      await svc.from("organizations").delete().eq("id",org.id);
+      if (userId) await svc.auth.admin.deleteUser(userId);
+    }
+  });
+}
+
 function tokenPath(acceptUrl: string): string {
   const t = tokenOf(acceptUrl);
   return `/team/accept-invite/${t}`;

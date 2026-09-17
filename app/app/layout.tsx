@@ -20,6 +20,7 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { listarConexoesCaidas, type ConexaoCaida } from "@/lib/channels/health";
 import { VoiceCallProvider } from "@/components/voice/VoiceCallContext";
 import { acessoFoiRevogado } from "@/lib/auth/vinculo-revogado";
+import { deveAbrirImplantacao } from "@/lib/onboarding/acesso";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await loadAuthUser();
@@ -41,6 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!activeOrg && !user.support && (await acessoFoiRevogado(user.id))) {
     redirect("/acesso-revogado");
   }
+  if (!activeOrg && !user.support && !user.is_platform_admin) redirect("/auth/complete-invite");
 
   /**
    * A cor desta organização, serializada, ou `null` quando ela não tem uma.
@@ -105,8 +107,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     enrolled = isEnrolled;
     needsMfaGate = mfaRequired;
 
-    if (orgRow && !orgRow.onboarded_at && !user.support) redirect("/onboarding");
     if (orgRow?.status === "suspended") redirect("/account-suspended");
+    if (orgRow && deveAbrirImplantacao({ role: activeOrg.role, completed: !!orgRow.onboarded_at,
+      support: !!user.support, platform: user.is_platform_admin, settings: orgRow.settings })) redirect("/onboarding");
     // G4-02: expõe visibility_mode ao client (inbox decide visões visíveis).
     // Fonte confiável (admin client, org do cookie validado) — nunca do body.
     const mode = (orgRow?.settings as { visibility_mode?: VisibilityMode } | null)

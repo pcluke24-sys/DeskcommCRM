@@ -96,7 +96,7 @@ export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
          */
         if (res.sessao_ativa) {
           router.replace(
-            convite ? `/team/accept-invite/${convite.token}` : "/get-started",
+            convite ? "/auth/complete-invite" : "/get-started",
           );
           return;
         }

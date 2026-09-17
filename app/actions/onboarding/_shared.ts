@@ -9,6 +9,7 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OnboardingState } from "@/lib/schemas/onboarding";
 import { moduloIaEstaLiberado } from "@/lib/ai/modulo";
+import { podeConfigurarOrganizacao } from "@/lib/onboarding/acesso";
 
 export class OnboardingError extends Error {
   constructor(
@@ -37,6 +38,13 @@ export async function requireOnboardingCtx(): Promise<OnboardingCtx> {
     throw new OnboardingError("forbidden", "Acompanhamento somente leitura ou encerrado.");
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) throw new OnboardingError("no_active_org", "Sem organização ativa.");
+  if (!podeConfigurarOrganizacao(activeOrg.role))
+    throw new OnboardingError("forbidden", "Somente administrador ou manager configura a organização.");
+  const { data: configuration, error: configurationError } = await createAdminClient().from("organizations")
+    .select("settings").eq("id", activeOrg.orgId).maybeSingle();
+  if (configurationError) throw new OnboardingError("db_error", configurationError.message);
+  if ((configuration?.settings as Record<string, unknown> | null)?.setup_mode === "agency" && !user.is_platform_admin)
+    throw new OnboardingError("forbidden", "A agência está preparando esta organização.");
   return {
     userId: user.id,
     orgId: activeOrg.orgId,
@@ -54,6 +62,7 @@ export async function loadOnboardingState(
   state: OnboardingState;
   onboardedAt: string | null;
   aiModuleEnabled: boolean;
+  setupMode: "agency" | "client";
 }> {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -71,6 +80,7 @@ export async function loadOnboardingState(
     state: (data.onboarding_state as OnboardingState | null) ?? {},
     onboardedAt: (data.onboarded_at as string | null) ?? null,
     aiModuleEnabled: moduloIaEstaLiberado(data.settings),
+    setupMode: (data.settings as Record<string, unknown> | null)?.setup_mode === "agency" ? "agency" : "client",
   };
 }
 

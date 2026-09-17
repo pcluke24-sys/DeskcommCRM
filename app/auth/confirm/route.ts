@@ -32,13 +32,15 @@ import { env } from "@/lib/env";
  *   signUp.ts anexam `?type=` no redirectTo/emailRedirectTo — é o único jeito
  *   desse dado sobreviver ao hop pelo GoTrue nesse formato.
  *
- *   ⚠️ O formato `code` NÃO FECHA nesta instalação, e o motivo é estrutural.
+ *   O verificador PKCE precisa acompanhar a navegação do e-mail.
  *   `@supabase/ssr` força `flowType: "pkce"` (createServerClient.js:33) e grava
  *   o verificador num cookie (`<storageKey>-code-verifier`, cookies.js:18) com
  *   as MESMAS `cookieOptions` da sessão (cookies.js:227,232) — isto é, com o
- *   `sameSite: "strict"` de `lib/supabase/server.ts:35`. Clique de link vindo
- *   de webmail é navegação CROSS-SITE: o navegador não manda cookie Strict, o
- *   verificador não chega, e `exchangeCodeForSession` falha. O formato
+ *   `sameSite: "strict"` da sessão. `authCookieOptions` sobrescreve SOMENTE
+ *   o cookie descartável `-code-verifier` para Lax, permitindo o GET do webmail
+ *   sem relaxar os cookies da sessão. Em outro dispositivo esse verificador
+ *   não existe: o login seguinte retoma o convite em `/auth/complete-invite`.
+ *   O formato
  *   `token_hash` não depende de cookie nenhum.
  *
  *   (O que NÃO está medido: um cliente de e-mail nativo abre o link sem

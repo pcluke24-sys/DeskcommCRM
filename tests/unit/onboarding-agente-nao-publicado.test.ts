@@ -682,7 +682,9 @@ describe("onboarding: o agente nasce no provedor que a instalação escolheu", (
 
     expect(res).not.toBe("redirecionou");
     const r = res as CreateAgentResult;
-    expect(r.ok && r.publish_error).toMatch(/permission denied for table organizations/);
+    // Agora a autorização da implantação consulta settings antes de criar.
+    // Falha fechada: não publica nem cria um agente sem conhecer a política.
+    expect(r).toMatchObject({ ok: false, error: "db_error" });
     expect(estado.versoes).toHaveLength(0);
   });
 });

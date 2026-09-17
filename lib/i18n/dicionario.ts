@@ -37,6 +37,13 @@ import type { Idioma } from "./idiomas";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  "Quem fará a implantação?": { es: "¿Quién realizará la implementación?" },
+  "O administrador do cliente no primeiro acesso": { es: "El administrador del cliente en el primer acceso" },
+  "Minha agência entrega o CRM configurado": { es: "Mi agencia entrega el CRM configurado" },
+  "Concluir implantação": { es: "Finalizar implementación" },
+  "Implantação concluída. O cliente já pode acessar o CRM.": { es: "Implementación finalizada. El cliente ya puede acceder al CRM." },
+  "Não foi possível concluir a implantação.": { es: "No se pudo finalizar la implementación." },
+  "Configure a organização pelo acompanhamento ou pelo seletor de organizações. Depois marque a implantação como concluída.": { es: "Configure la organización mediante el acompañamiento o el selector de organizaciones. Después marque la implementación como finalizada." },
   "Liberar módulo de IA para esta organização": { es: "Habilitar el módulo de IA para esta organización" },
   "Módulo de IA liberado.": { es: "Módulo de IA habilitado." },
   "Módulo de IA bloqueado.": { es: "Módulo de IA bloqueado." },
