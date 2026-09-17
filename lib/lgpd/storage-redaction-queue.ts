@@ -9,6 +9,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
+import { drainTenantDeletionStorage } from "@/lib/admin/tenant-deletion-storage";
 
 export interface DrainStats {
   attempted: number;
@@ -41,6 +42,7 @@ export async function drainStorageRedactionQueue(
   const limit = opts.limit ?? DEFAULT_BATCH;
 
   const stats: DrainStats = { attempted: 0, deleted: 0, failed: 0, skipped: 0 };
+  await drainTenantDeletionStorage(limit);
 
   const { data: rows, error } = await admin
     .from("storage_redaction_queue")
