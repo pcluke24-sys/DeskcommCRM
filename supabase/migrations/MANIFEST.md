@@ -2,6 +2,7 @@
 
 | Timestamp | Migration adicional do fork | Finalidade |
 | --- | --- | --- |
+| `20260917180000` | `0266_organizacao_principal` | Principal única escolhida pelo dono; proteção por FK e RPC serializada; associação administrativa a clientes não impede exclusão. |
 | `20260917170000` | `0265_excluir_tenant_suspenso` | RPC transacional restrita ao dono original, tenant suspenso e confirmação; fila de arquivos da plataforma sem FK para sobreviver à exclusão. |
 | `20260916140000` | `0261_historico_do_funil` | Registro prospectivo de entradas e desfechos; agregação por período com RLS e sem backfill. |
 | `20260916150000` | `0262_atribuicao_no_historico_do_funil` | Leitura agregada, prospectiva e isolada por empresa das entradas por origem, UTM ou referência de anúncio; sem dado pessoal nem backfill. |

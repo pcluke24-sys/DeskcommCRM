@@ -54,6 +54,7 @@ export function TenantOverviewClient({ id }: TenantOverviewClientProps) {
           onboardedAt={organization.onboarded_at}
           slug={organization.slug}
           canDeleteTenant={data.data.can_delete_tenant}
+          primaryOrganizationId={data.data.primary_organization_id ?? null}
         />
       </div>
     </div>

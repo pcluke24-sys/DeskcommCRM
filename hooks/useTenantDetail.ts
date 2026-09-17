@@ -43,6 +43,7 @@ export interface TenantDetailResponse {
     counts: TenantCounts;
     integrations: TenantIntegrations;
     can_delete_tenant?: boolean;
+    primary_organization_id?: string | null;
   };
 }
 

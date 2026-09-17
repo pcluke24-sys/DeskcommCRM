@@ -4,10 +4,13 @@
   "nodes": [
     { "id": "actions", "lane": "platform", "label": "TenantActions", "path": "components/admin/tenants/TenantActions.tsx" },
     { "id": "api", "lane": "platform", "label": "DELETE validado", "path": "app/api/v1/admin/tenants/[id]/delete/route.ts" },
-    { "id": "db", "lane": "platform", "label": "RPC transacional e auditoria", "path": "supabase/migrations/20260917170000_0265_excluir_tenant_suspenso.sql" },
+    { "id": "db", "lane": "platform", "label": "Principal única, RPC transacional e auditoria", "path": "supabase/migrations/20260917180000_0266_organizacao_principal.sql" },
+    { "id": "primary", "lane": "platform", "label": "Selecionar organização principal", "path": "app/api/v1/admin/tenants/[id]/primary/route.ts" },
     { "id": "cleanup", "lane": "platform", "label": "Cron de limpeza", "path": "lib/admin/tenant-deletion-storage.ts" }
   ],
   "edges": [
+    { "from": "actions", "to": "primary", "label": "Escolha e confirmação do dono" },
+    { "from": "primary", "to": "db", "label": "Proteção única e auditoria" },
     { "from": "actions", "to": "api", "label": "Confirmação explícita" },
     { "from": "api", "to": "db", "label": "Ator da sessão validada" },
     { "from": "db", "to": "cleanup", "label": "Fila persistente por prefixo exclusivo" }

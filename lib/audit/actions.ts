@@ -29,6 +29,7 @@
  * `tests/unit/audit-lista-do-painel-e-derivada.test.tsx` reprova quem tentar.
  */
 export const AUDIT_ACTIONS = [
+  "platform.primary_organization_updated",
   "tenant.deleted",
   "auth.login_success",
   "auth.login_failed",

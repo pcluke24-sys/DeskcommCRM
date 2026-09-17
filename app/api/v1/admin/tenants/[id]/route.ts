@@ -145,12 +145,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     "fn_tenant_deletion_owner",
     { p_actor: adminCtx.user.id },
   );
+  const { data: primary, error: primaryError } = await admin
+    .from("platform_primary_organization")
+    .select("organization_id")
+    .eq("id", 1)
+    .maybeSingle();
   return ok(
     {
       organization: org,
       counts,
       integrations,
       can_delete_tenant: !deletionError && deletionOwner === true,
+      primary_organization_id: primaryError ? null : (primary?.organization_id ?? null),
     },
     { requestId },
   );

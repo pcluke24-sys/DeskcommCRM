@@ -8,7 +8,15 @@ Não confundir administrador de organização com dono da instalação.
 
 A RPC não apaga usuários Auth. Cascatas existentes removem os registros do tenant.
 A auditoria permanece global com tenant_id e tenant_slug nos metadados.
-A organização do próprio dono não pode ser removida. Sessões de WhatsApp devem ser
+A organização principal explicitamente escolhida não pode ser removida. Associação
+do dono a organizações de clientes NÃO bloqueia a exclusão. A migração 0266 adiciona
+singleton de plataforma com FK RESTRICT; sem principal, exclusões falham fechadas.
+TenantActions oferece seleção com confirmação, somente ao dono; PUT primary chama
+fn_set_primary_organization, registra platform.primary_organization_updated visível
+na auditoria. Seleção e exclusão travam o mesmo singleton para evitar corridas.
+Erro conserva a seleção anterior e mostra toast; nenhum cron é necessário para
+configuração síncrona. Não há atuação de IA nesse controle administrativo.
+Sessões de WhatsApp devem ser
 removidas pela tela de conexões; calendários e integrações devem estar desconectados.
 
 Arquivos: somente storage.objects cujo nome começa com UUID exato + barra.
