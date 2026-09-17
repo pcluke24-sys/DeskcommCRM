@@ -1,4 +1,5 @@
 // Prova transacional: fixtures aleatórias e rollback incondicional. Sem dados pessoais.
+/* eslint-disable @typescript-eslint/no-require-imports -- Script CommonJS executado via stdin no container Node. */
 const pg = require("pg");
 const fs = require("node:fs");
 const { randomUUID } = require("node:crypto");
