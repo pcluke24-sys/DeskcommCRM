@@ -1,4 +1,6 @@
 "use client";
+import { useT } from "@/hooks/i18n/useT";
+import { useIdioma } from "@/lib/i18n/IdiomaProvider";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -65,6 +67,8 @@ function janela(de: string, ate: string) {
   return { from: inicio.toISOString(), to: fim.toISOString() };
 }
 export function HistoricoClient() {
+  const t = useT();
+  const idioma = useIdioma();
   const [de, setDe] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 29);
@@ -129,17 +133,17 @@ export function HistoricoClient() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end gap-3">
         <label className="block space-y-1 text-sm">
-          De
+          {t("De")}
           <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} />
         </label>
         <label className="block space-y-1 text-sm">
-          Até (inclusive)
+          {t("Até (inclusive)")}
           <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
         </label>
         <label className="block space-y-1 text-sm">
-          Funil
+          {t("Funil")}
           <select
-            aria-label="Funil"
+            aria-label={t("Funil")}
             className="flex h-9 w-full rounded-md border bg-background px-3"
             value={pipelineId || dados?.pipeline?.id || ""}
             onChange={(e) => setPipelineId(e.target.value)}
@@ -159,7 +163,7 @@ export function HistoricoClient() {
           }}
           disabled={!periodo || consulta.isFetching}
         >
-          Atualizar
+          {t("Atualizar")}
         </Button>
         <Button
           onClick={baixar}
@@ -170,70 +174,71 @@ export function HistoricoClient() {
             (visao === "etapas" ? !report : !attribution || atribuicaoConsulta.isFetching)
           }
         >
-          Baixar CSV
+          {t("Baixar CSV")}
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Datas no fuso do seu navegador ({Intl.DateTimeFormat().resolvedOptions().timeZone}). Máximo:
-        366 dias. Entradas repetidas contam uma vez por lead em cada etapa.
+        {t("Datas no fuso do seu navegador (")}
+        {Intl.DateTimeFormat().resolvedOptions().timeZone}
+        {t("). Máximo: 366 dias. Entradas repetidas contam uma vez por lead em cada etapa.")}
       </p>
-      <div className="flex flex-wrap items-center gap-2" aria-label="Tipo de relatório">
+      <div className="flex flex-wrap items-center gap-2" aria-label={t("Tipo de relatório")}>
         <Button
           variant={visao === "etapas" ? "default" : "outline"}
           onClick={() => setVisao("etapas")}
         >
-          Por etapas
+          {t("Por etapas")}
         </Button>
         <Button
           variant={visao === "atribuicao" ? "default" : "outline"}
           onClick={() => setVisao("atribuicao")}
         >
-          Por origem e campanhas
+          {t("Por origem e campanhas")}
         </Button>
         {visao === "atribuicao" && (
           <label className="ml-1 space-y-1 text-sm">
-            Agrupar por
+            {t("Agrupar por")}
             <select
-              aria-label="Agrupar relatório de atribuição por"
+              aria-label={t("Agrupar relatório de atribuição por")}
               className="flex h-9 w-full rounded-md border bg-background px-3"
               value={agrupamento}
               onChange={(e) => setAgrupamento(e.target.value as AgrupamentoDeAtribuicao)}
             >
               {Object.entries(nomesDosAgrupamentos).map(([value, label]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(String(label))}
                 </option>
               ))}
             </select>
           </label>
         )}
       </div>
-      {!periodo && <p role="alert">Selecione um período válido de até 366 dias.</p>}
-      {consulta.isLoading && <p role="status">Carregando histórico…</p>}
+      {!periodo && <p role="alert">{t("Selecione um período válido de até 366 dias.")}</p>}
+      {consulta.isLoading && <p role="status">{t("Carregando histórico…")}</p>}
       {consulta.isError && (
         <p role="alert" className="text-destructive">
-          Não foi possível carregar o relatório. Clique em Atualizar para tentar novamente.
+          {t("Não foi possível carregar o relatório. Clique em Atualizar para tentar novamente.")}
         </p>
       )}
       {visao === "etapas" && periodo && report && (
         <>
           <p className="rounded-md border p-3 text-sm">
-            Coleta iniciada:{" "}
+            {t("Coleta iniciada:")}{" "}
             {report.enabled_since
-              ? new Date(report.enabled_since).toLocaleString("pt-BR")
-              : "no primeiro novo registro"}
-            . Nenhum histórico anterior foi recuperado.
+              ? new Date(report.enabled_since).toLocaleString(idioma)
+              : t("no primeiro novo registro")}
+            {t(". Nenhum histórico anterior foi recuperado.")}
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              ["Leads com atividade no período", report.totals.leads],
+              [t("Leads com atividade no período"), report.totals.leads],
               ["Novos leads recebidos", report.totals.received],
-              ["Leads com venda", report.totals.won],
+              [t("Leads com venda"), report.totals.won],
               ["Leads perdidos", report.totals.lost],
             ].map(([label, n]) => (
-              <Card key={label}>
+              <Card key={t(String(label))}>
                 <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">{label}</p>
+                  <p className="text-sm text-muted-foreground">{t(String(label))}</p>
                   <p className="text-2xl font-semibold">{n}</p>
                 </CardContent>
               </Card>
@@ -241,8 +246,9 @@ export function HistoricoClient() {
           </div>
           {report.totals.leads === 0 && (
             <p className="rounded-md border p-4">
-              Ainda não há entradas registradas neste período. Crie ou mova um lead no Kanban e
-              clique em Atualizar.
+              {t(
+                "Ainda não há entradas registradas neste período. Crie ou mova um lead no Kanban e clique em Atualizar.",
+              )}
             </p>
           )}
           <div className="overflow-x-auto rounded-md border">
@@ -251,13 +257,13 @@ export function HistoricoClient() {
                 <tr>
                   {[
                     "Etapa",
-                    "Leads únicos",
+                    t("Leads únicos"),
                     "Entradas",
-                    "Próxima etapa",
-                    "Avançaram",
-                    "Taxa de avanço",
+                    t("Próxima etapa"),
+                    t("Avançaram"),
+                    t("Taxa de avanço"),
                   ].map((h) => (
-                    <th key={h} className="p-3 whitespace-nowrap">
+                    <th key={t(h)} className="p-3 whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -282,44 +288,46 @@ export function HistoricoClient() {
             </table>
           </div>
           <p className="text-xs text-muted-foreground">
-            Taxa: entre os leads que entraram na etapa, quantos depois entraram na próxima etapa não
-            perdida, dentro do mesmo período. Não é uma previsão nem a divisão dos totais entre
-            colunas. Saltos, retornos e entradas anteriores ao período podem explicar diferenças.
-            Ganhos e perdas são desfechos registrados no período, não o estado atual; um lead
-            reaberto pode aparecer nos dois.
+            {t(
+              "Taxa: entre os leads que entraram na etapa, quantos depois entraram na próxima etapa não perdida, dentro do mesmo período. Não é uma previsão nem a divisão dos totais entre colunas. Saltos, retornos e entradas anteriores ao período podem explicar diferenças. Ganhos e perdas são desfechos registrados no período, não o estado atual; um lead reaberto pode aparecer nos dois.",
+            )}
           </p>
           <Link className="text-sm underline" href="/app/kanban">
-            Abrir Kanban para acompanhar e agir
+            {t("Abrir Kanban para acompanhar e agir")}
           </Link>
         </>
       )}
       {visao === "atribuicao" && atribuicaoConsulta.isLoading && (
-        <p role="status">Carregando atribuição…</p>
+        <p role="status">{t("Carregando atribuição…")}</p>
       )}
       {visao === "atribuicao" && atribuicaoConsulta.isError && (
         <p role="alert" className="text-destructive">
-          Não foi possível carregar a atribuição. Clique em Atualizar para tentar novamente.
+          {t("Não foi possível carregar a atribuição. Clique em Atualizar para tentar novamente.")}
         </p>
       )}
       {visao === "atribuicao" && attribution && (
         <>
           <p className="rounded-md border p-3 text-sm">
-            Cada célula é o número de leads únicos que entraram naquela etapa no período, agrupados
-            pela origem registrada quando o lead nasceu. Um lead pode aparecer em mais de uma etapa.
+            {t(
+              "Cada célula é o número de leads únicos que entraram naquela etapa no período, agrupados pela origem registrada quando o lead nasceu. Um lead pode aparecer em mais de uma etapa.",
+            )}
           </p>
           {attribution.groups.length === 0 ? (
             <p className="rounded-md border p-4">
-              Ainda não há entradas registradas neste período. Crie ou mova um lead no Kanban e
-              clique em Atualizar.
+              {t(
+                "Ainda não há entradas registradas neste período. Crie ou mova um lead no Kanban e clique em Atualizar.",
+              )}
             </p>
           ) : (
             <div className="overflow-x-auto rounded-md border">
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted">
                   <tr>
-                    <th className="p-3 whitespace-nowrap">{nomesDosAgrupamentos[agrupamento]}</th>
+                    <th className="p-3 whitespace-nowrap">
+                      {t(nomesDosAgrupamentos[agrupamento])}
+                    </th>
                     {agrupamento === "ad_reference" && (
-                      <th className="p-3 whitespace-nowrap">Título recebido</th>
+                      <th className="p-3 whitespace-nowrap">{t("Título recebido")}</th>
                     )}
                     {attribution.stages.map((stage) => (
                       <th key={stage.id} className="p-3 whitespace-nowrap">
@@ -331,7 +339,9 @@ export function HistoricoClient() {
                 <tbody>
                   {attribution.groups.map((group) => (
                     <tr key={group.key} className="border-t">
-                      <td className="p-3 font-medium">{rotuloDoGrupo(agrupamento, group.key)}</td>
+                      <td className="p-3 font-medium">
+                        {t(rotuloDoGrupo(agrupamento, group.key) ?? group.key)}
+                      </td>
                       {agrupamento === "ad_reference" && (
                         <td className="p-3">{group.ad_title ?? "—"}</td>
                       )}
@@ -347,13 +357,13 @@ export function HistoricoClient() {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            “Referência de anúncio” mostra o identificador capturado no clique, como o CTWA CLID;
-            ele não é o ID interno do anúncio na plataforma. O título só aparece quando veio no
-            payload de origem. Dados sem UTM ou referência ficam agrupados separadamente.
+            {t(
+              "“Referência de anúncio” mostra o identificador capturado no clique, como o CTWA CLID; ele não é o ID interno do anúncio na plataforma. O título só aparece quando veio no payload de origem. Dados sem UTM ou referência ficam agrupados separadamente.",
+            )}
           </p>
         </>
       )}
-      {dados && !dados.pipeline && <p>Nenhum funil disponível nesta empresa.</p>}
+      {dados && !dados.pipeline && <p>{t("Nenhum funil disponível nesta empresa.")}</p>}
     </div>
   );
 }

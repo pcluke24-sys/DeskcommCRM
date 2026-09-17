@@ -1,6 +1,6 @@
 # Histórico do funil — contrato do fork
 
-Coleta prospectiva pela migration 0261. Não há backfill. Duas tabelas adicionais, sem alteração de campos ou fluxos existentes: `crm_funnel_tracking` registra o início por organização; `crm_funnel_entries` recebe criação, entrada de etapa e mudança de desfecho por trigger transacional. Não faz HTTP nem interfere nos eventos Meta.
+Coleta prospectiva pela migration 9001 (antiga 0261 do fork; timestamp preservado). Não há backfill. Duas tabelas adicionais, sem alteração de campos ou fluxos existentes: `crm_funnel_tracking` registra o início por organização; `crm_funnel_entries` recebe criação, entrada de etapa e mudança de desfecho por trigger transacional. Não faz HTTP nem interfere nos eventos Meta.
 
 Régua: janela UTC [from,to), selecionada por datas inclusive no fuso do navegador. Cada etapa conta leads distintos; entradas repetidas aparecem separadas. Taxa de avanço usa os mesmos leads entrando depois na próxima etapa não perdida dentro da mesma janela, não a divisão de totais independentes. Não infere etapas saltadas. Ganho/perda conta desfechos observados, não estado atual; reabertura permite os dois. Mensagens não são contadas: novos leads recebidos são cards criados.
 

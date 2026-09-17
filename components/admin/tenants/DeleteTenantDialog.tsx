@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useT } from "@/hooks/i18n/useT";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ export function DeleteTenantDialog({
   organizationId: string;
   slug: string;
 }) {
+  const t = useT();
   const router = useRouter();
   const queries = useQueryClient();
   const [confirmation, setConfirmation] = useState("");
@@ -63,15 +65,17 @@ export function DeleteTenantDialog({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir tenant definitivamente</AlertDialogTitle>
+          <AlertDialogTitle>{t("Excluir tenant definitivamente")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta ação não pode ser desfeita. Apaga os dados desta organização, incluindo leads,
-            conversas, relatórios e credenciais. Outros tenants e contas de login não serão
-            excluídos. Remova as sessões de WhatsApp e desconecte as integrações antes de continuar.
+            {t(
+              "Esta ação não pode ser desfeita. Apaga os dados desta organização, incluindo leads, conversas, relatórios e credenciais. Outros tenants e contas de login não serão excluídos. Remova as sessões de WhatsApp e desconecte as integrações antes de continuar.",
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3">
-          <Label htmlFor="delete-tenant-confirmation">Digite {slug} para confirmar</Label>
+          <Label htmlFor="delete-tenant-confirmation">
+            {t("Digite")} {slug} {t("para confirmar")}
+          </Label>
           <Input
             id="delete-tenant-confirmation"
             value={confirmation}
@@ -79,7 +83,9 @@ export function DeleteTenantDialog({
             onChange={(e) => setConfirmation(e.target.value)}
             autoComplete="off"
           />
-          <Label htmlFor="delete-tenant-reason">Motivo da exclusão (mínimo 10 caracteres)</Label>
+          <Label htmlFor="delete-tenant-reason">
+            {t("Motivo da exclusão (mínimo 10 caracteres)")}
+          </Label>
           <Textarea
             id="delete-tenant-reason"
             value={reason}

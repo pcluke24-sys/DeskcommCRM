@@ -153,14 +153,14 @@ export function TenantActions({
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
               {isPrimary
-                ? "Sua organização principal — protegida contra exclusão."
+                ? t("Sua organização principal — protegida contra exclusão.")
                 : !primaryOrganizationId
-                  ? "Defina sua organização principal antes de excluir qualquer tenant."
-                  : "Esta é uma organização de cliente, não a principal."}
+                  ? t("Defina sua organização principal antes de excluir qualquer tenant.")
+                  : t("Esta é uma organização de cliente, não a principal.")}
             </p>
             {!isPrimary && status === "active" && (
               <Button className="w-full" variant="outline" onClick={() => setPrimaryOpen(true)}>
-                Definir como minha organização principal
+                {t("Definir como minha organização principal")}
               </Button>
             )}
           </div>
@@ -190,7 +190,7 @@ export function TenantActions({
 
         {isSuspended && canDeleteTenant && slug && primaryOrganizationId && !isPrimary && (
           <Button className="w-full" variant="destructive" onClick={() => setDeleteOpen(true)}>
-            Excluir tenant definitivamente
+            {t("Excluir tenant definitivamente")}
           </Button>
         )}
         {isRedacted && (
@@ -203,14 +203,16 @@ export function TenantActions({
       <AlertDialog open={primaryOpen} onOpenChange={setPrimaryOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Definir organização principal?</AlertDialogTitle>
+            <AlertDialogTitle>{t("Definir organização principal?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {displayName} será sua única organização principal e não poderá ser excluída. Se já
-              houver outra principal, ela deixará de ter essa proteção. Nenhum dado será apagado.
+              {displayName}
+              {t(
+                "será sua única organização principal e não poderá ser excluída. Se já houver outra principal, ela deixará de ter essa proteção. Nenhum dado será apagado.",
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={savingPrimary}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={savingPrimary}>{t("Cancelar")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={savingPrimary}
               onClick={(event) => {
@@ -218,7 +220,7 @@ export function TenantActions({
                 void setPrimary();
               }}
             >
-              {savingPrimary ? "Salvando..." : "Confirmar organização principal"}
+              {savingPrimary ? t("Salvando...") : t("Confirmar organização principal")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
