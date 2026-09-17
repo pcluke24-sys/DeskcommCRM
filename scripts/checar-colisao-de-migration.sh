@@ -115,6 +115,25 @@ adicionadas_nomes="$(xargs -n1 basename <<<"$adicionadas" | sed '/^$/d')"
 base_arvore="$(git ls-tree -r --name-only "$BASE" -- supabase/migrations 2>/dev/null | sed 's#^supabase/migrations/##' || true)"
 head_arvore="$(git ls-tree -r --name-only HEAD -- supabase/migrations 2>/dev/null | sed 's#^supabase/migrations/##' || true)"
 
+# Fork: renumeração de migration aplicada preserva identidade e SQL. Um nome
+# removido da base só libera seu NNNN se existe exatamente uma substituta no
+# HEAD com o MESMO timestamp e o MESMO SQL (ignorando apenas comentários de
+# linha). Caso contrário continua na comparação e qualquer colisão reprova.
+base_original="$base_arvore"
+while IFS= read -r antigo; do
+  [[ "$antigo" =~ ^([0-9]{14})_[0-9]{4}_.+\.sql$ ]] || continue
+  grep -qxF "$antigo" <<<"$head_arvore" && continue
+  identidade="${BASH_REMATCH[1]}"
+  substitutas="$(grep -E "^${identidade}_[0-9]{4}_.+\.sql$" <<<"$head_arvore" || true)"
+  [ "$(grep -c . <<<"$substitutas" || true)" = 1 ] || continue
+  sql_antigo="$(git show "$BASE:supabase/migrations/$antigo" | sed '/^[[:space:]]*--/d')"
+  sql_novo="$(git show "HEAD:supabase/migrations/$substitutas" | sed '/^[[:space:]]*--/d')"
+  if [ "$sql_antigo" = "$sql_novo" ]; then
+    base_arvore="$(grep -vxF "$antigo" <<<"$base_arvore" || true)"
+    echo "Migration preservada: $antigo → $substitutas (mesma identidade e SQL)."
+  fi
+done <<<"$base_original"
+
 # Próximo livre medido nas DUAS árvores: olhar só a listagem local é o erro que a
 # complemento-do-ci.md §1 aponta no hook — "compare contra o remoto".
 ultimo="$(printf '%s\n%s\n' "$base_arvore" "$head_arvore" | grep -oE '_[0-9]{4}_' | tr -d _ | sort -n | tail -1)"

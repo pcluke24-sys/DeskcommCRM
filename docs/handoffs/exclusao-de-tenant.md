@@ -9,7 +9,7 @@ Não confundir administrador de organização com dono da instalação.
 A RPC não apaga usuários Auth. Cascatas existentes removem os registros do tenant.
 A auditoria permanece global com tenant_id e tenant_slug nos metadados.
 A organização principal explicitamente escolhida não pode ser removida. Associação
-do dono a organizações de clientes NÃO bloqueia a exclusão. A migração 0266 adiciona
+do dono a organizações de clientes NÃO bloqueia a exclusão. A migração 9004 (antiga 0266 do fork) adiciona
 singleton de plataforma com FK RESTRICT; sem principal, exclusões falham fechadas.
 TenantActions oferece seleção com confirmação, somente ao dono; PUT primary chama
 fn_set_primary_organization, registra platform.primary_organization_updated visível
@@ -35,8 +35,7 @@ Mapa: docs/architecture/exclusao-de-tenant.architecture.json.
 
 Atualização 1.31.1 NÃO aplicada: comparação merge-tree encontrou conflitos em crm-summary,
 layout autenticado, ConversationHeader, KanbanCardActions, dicionário e mapa de jornadas.
-Também há números 0261/0262 de migrations upstream usados por nossos relatórios;
-integração futura exige revisão de ambos os históricos, sem sobrescrever migrations.
+Na integração v1.32.1, nossas migrations foram renumeradas para 9001–9004 sem alterar timestamps ou SQL. Ver integracao-v1.32.1.md; publicação ainda depende dos testes.
 
 ## Verificação e publicação — 17/09/2026
 

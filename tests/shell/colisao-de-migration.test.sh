@@ -182,6 +182,24 @@ assert_exit "$code" 2 "base imensurável reprova com exit 2 (distinto de colisã
 assert_contains "$saida" "NÃO MEDIDO" "declara o não medido em vez de passar em silêncio"
 assert_contains "$saida" "git fetch origin origin/nao-existe" "diz o comando do conserto"
 
+echo "13. fork renumera sem alterar identidade/SQL e libera o número antigo"
+c="$TMP/c13"; clonar "$c"; git -C "$c" switch -q -c fix/renumera
+git -C "$c" mv supabase/migrations/20260101120000_0262_existente.sql supabase/migrations/20260101120000_9001_existente.sql
+printf '\n-- comentário do fork\n' >> "$c/supabase/migrations/20260101120000_9001_existente.sql"
+migrar "$c" "20260916230000_0262_oficial.sql"; commit "$c" "renumera preservando SQL"
+saida="$(gate "$c")"; code=$?
+assert_exit "$code" 0 "renumeração com SQL preservado libera número para upstream"
+assert_contains "$saida" "Migration preservada:" "registra comparação de identidade e SQL"
+
+echo "14. alterar SQL na renumeração não libera o número antigo"
+c="$TMP/c14"; clonar "$c"; git -C "$c" switch -q -c fix/renumera-alterada
+git -C "$c" mv supabase/migrations/20260101120000_0262_existente.sql supabase/migrations/20260101120000_9001_existente.sql
+printf 'select 999;\n' >> "$c/supabase/migrations/20260101120000_9001_existente.sql"
+migrar "$c" "20260916230000_0262_oficial.sql"; commit "$c" "SQL alterado"
+saida="$(gate "$c")"; code=$?
+assert_exit "$code" 1 "SQL alterado mantém colisão bloqueada"
+assert_contains "$saida" "NNNN=0262" "continua identificando a colisão real"
+
 echo
 if [ "$falhas" = 0 ]; then echo "colisao-de-migration: $casos casos, todos verdes"; exit 0
 else echo "colisao-de-migration: $falhas de $casos casos vermelhos"; exit 1; fi
