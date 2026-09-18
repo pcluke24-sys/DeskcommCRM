@@ -14,13 +14,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ehPlataformaConhecida } from "@/lib/plataformas-de-anuncio/registry";
-import type { PlataformaDeAnuncio } from "@/lib/plataformas-de-anuncio/types";
+import type {
+  IdentidadeParaCorrespondencia,
+  PlataformaDeAnuncio,
+} from "@/lib/plataformas-de-anuncio/types";
 
 export interface AtribuicaoParaEnvio {
   plataforma: PlataformaDeAnuncio;
   /** `ad_source_id` — o `ctwa_clid`, quando o clique que abriu a conversa existe. */
   cliqueDeOrigem: string | null;
   telefone: string;
+  identidade: IdentidadeParaCorrespondencia;
 }
 
 export type LeituraDeAtribuicao =
@@ -43,14 +47,21 @@ export async function lerAtribuicao(
 
   const { data } = await admin
     .from("contacts")
-    .select("phone_number, source_metadata")
+    .select("phone_number, email, name, is_anonymized, source_metadata")
     .eq("id", contactId)
     .eq("organization_id", organizationId)
     .maybeSingle();
 
   if (!data) return { temAtribuicao: false, motivo: "sem_contato" };
 
-  const linha = data as { phone_number: string | null; source_metadata: unknown };
+  const linha = data as {
+    phone_number: string | null;
+    email?: string | null;
+    name?: string | null;
+    is_anonymized?: boolean;
+    source_metadata: unknown;
+  };
+  if (linha.is_anonymized) return { temAtribuicao: false, motivo: "sem_contato" };
   const telefone = linha.phone_number ? linha.phone_number.replace(/\D/g, "") : "";
   if (!telefone) return { temAtribuicao: false, motivo: "sem_telefone" };
 
@@ -60,6 +71,24 @@ export async function lerAtribuicao(
       : {};
 
   const clique = typeof meta.ad_source_id === "string" ? meta.ad_source_id.trim() : "";
+  const web =
+    meta.web_tracking && typeof meta.web_tracking === "object"
+      ? (meta.web_tracking as Record<string, unknown>)
+      : {};
+  const texto = (valor: unknown): string | undefined =>
+    typeof valor === "string" && valor.trim() ? valor.trim() : undefined;
+  const partes = linha.name?.trim().split(/\s+/) ?? [];
+  const identidade: IdentidadeParaCorrespondencia = {
+    identificadorExterno: `${organizationId}:${contactId}`,
+    email: texto(linha.email),
+    nome: partes[0] || undefined,
+    sobrenome: partes.length > 1 ? partes.slice(1).join(" ") : undefined,
+    identificadorDeCliqueWeb: texto(web.fbc ?? meta.fbc),
+    identificadorDoNavegador: texto(web.fbp ?? meta.fbp),
+    // IP e navegador so entram quando a origem web os registrou no contato.
+    ipDoContato: texto(web.client_ip_address),
+    agenteDoNavegadorDoContato: texto(web.client_user_agent),
+  };
   // Se há clique, preservamos a plataforma que o originou. Sem clique, trata-se
   // de conversão offline/CRM: o telefone identifica a pessoa e a conexão Meta
   // da própria organização define o destino, sem inventar atribuição ao anúncio.
@@ -70,11 +99,12 @@ export async function lerAtribuicao(
   return {
     temAtribuicao: true,
     atribuicao: {
-      plataforma: clique ? meta.ad_platform as PlataformaDeAnuncio : "meta_ads",
+      plataforma: clique ? (meta.ad_platform as PlataformaDeAnuncio) : "meta_ads",
       cliqueDeOrigem: clique || null,
       // Só dígitos: a plataforma exige E.164 sem `+` nem separadores ANTES do
       // hash. Normalizar depois do hash seria tarde — o hash já estaria errado.
       telefone,
+      identidade,
     },
   };
 }
