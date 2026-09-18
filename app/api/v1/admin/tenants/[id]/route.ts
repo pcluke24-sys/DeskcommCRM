@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
@@ -165,6 +166,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 /** Liga/desliga o módulo comercial de IA. Somente a plataforma decide isso. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const requestId = randomUUID();
+  const supportDenied = await requireSupportWrite((await params).id);
+  if (supportDenied) return supportDenied;
   let adminCtx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
   try {
     adminCtx = await requirePlatformAdmin();

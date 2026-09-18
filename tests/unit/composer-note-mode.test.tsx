@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sendMock = vi.fn();
 const createNoteMock = vi.fn();
+vi.mock("@/hooks/auth/AuthProvider", () => ({ useAuth: () => ({ activeOrg: { ai_module_enabled: true } }) }));
 
 vi.mock("@/hooks/inbox/useSendMessage", () => ({
   useSendMessage: () => ({ mutate: sendMock, isPending: false }),

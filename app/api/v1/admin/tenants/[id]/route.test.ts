@@ -46,8 +46,7 @@ const LGPD_ROWS = [
 ];
 
 type Filtro =
-  | { kind: "eq"; col: string; val: unknown }
-  | { kind: "not_in"; col: string; vals: string[] };
+  { kind: "eq"; col: string; val: unknown } | { kind: "not_in"; col: string; vals: string[] };
 
 function lgpdBuilder() {
   const filtros: Filtro[] = [];
@@ -88,13 +87,14 @@ function contadorVazio() {
   builder.then = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ count: 0, data: [], error: null }).then(resolve);
   builder.single = async () => ({ data: ORG, error: null });
+  builder.maybeSingle = async () => ({ data: { organization_id: ORG_ID }, error: null });
   return builder;
 }
 
 function makeAdminStub() {
   return {
-    from: (table: string) =>
-      table === "lgpd_requests" ? lgpdBuilder() : contadorVazio(),
+    rpc: async () => ({ data: true, error: null }),
+    from: (table: string) => (table === "lgpd_requests" ? lgpdBuilder() : contadorVazio()),
   };
 }
 
@@ -110,10 +110,9 @@ beforeEach(() => {
 describe("GET /api/v1/admin/tenants/[id]", () => {
   it("conta como pendente o que o banco realmente grava (received/processing)", async () => {
     const { GET } = await import("./route");
-    const res = await GET(
-      new NextRequest(`http://localhost/api/v1/admin/tenants/${ORG_ID}`),
-      { params: Promise.resolve({ id: ORG_ID }) },
-    );
+    const res = await GET(new NextRequest(`http://localhost/api/v1/admin/tenants/${ORG_ID}`), {
+      params: Promise.resolve({ id: ORG_ID }),
+    });
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as {
