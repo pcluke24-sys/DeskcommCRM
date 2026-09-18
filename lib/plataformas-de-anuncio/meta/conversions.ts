@@ -33,6 +33,7 @@
  * devolve 200 e não produz efeito nenhum.
  */
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 
 import { VERSAO_PADRAO_DA_GRAPH } from "@/lib/graph-version";
 import { logger } from "@/lib/logger";
@@ -95,6 +96,34 @@ async function enviar(
   // Array de propósito: o formato aceita múltiplos valores por campo, e mandar
   // string crua onde ele espera lista é aceito com aviso e ignorado no match.
   if (conversao.telefone) userData.ph = [hash(conversao.telefone)];
+  const identidade = conversao.identidade;
+  if (identidade) {
+    userData.external_id = [hash(identidade.identificadorExterno)];
+    const email = identidade.email?.trim().toLowerCase();
+    if (email && email.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      userData.em = [hash(email)];
+    }
+    const normalizaNome = (valor: string | undefined): string =>
+      (valor ?? "")
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .toLowerCase()
+        .replace(/[^\p{L}]/gu, "");
+    const nome = normalizaNome(identidade.nome);
+    const sobrenome = normalizaNome(identidade.sobrenome);
+    if (nome) userData.fn = [hash(nome)];
+    if (sobrenome) userData.ln = [hash(sobrenome)];
+    const fbc = identidade.identificadorDeCliqueWeb;
+    const fbp = identidade.identificadorDoNavegador;
+    if (fbc && fbc.length <= 500 && /^fb\.\d+\.\d{13}\.[^\s]+$/.test(fbc)) userData.fbc = fbc;
+    if (fbp && /^fb\.\d+\.\d{13}\.\d+$/.test(fbp)) userData.fbp = fbp;
+    if (identidade.ipDoContato && isIP(identidade.ipDoContato)) {
+      userData.client_ip_address = identidade.ipDoContato;
+    }
+    const agente = identidade.agenteDoNavegadorDoContato;
+    if (agente && agente.length <= 1024 && !/[\r\n]/.test(agente))
+      userData.client_user_agent = agente;
+  }
 
   const corpo: Record<string, unknown> = {
     data: [

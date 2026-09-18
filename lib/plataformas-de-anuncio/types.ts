@@ -47,6 +47,18 @@ export type PlataformaDeAnuncio = "meta_ads" | "google_ads";
 /** Nome padrao ou personalizado aceito pela plataforma (validado na configuracao). */
 export type NomeDoEvento = string;
 
+/** Somente dados do contato; nunca dados do operador que movimenta o funil. */
+export interface IdentidadeParaCorrespondencia {
+  identificadorExterno: string;
+  email?: string;
+  nome?: string;
+  sobrenome?: string;
+  identificadorDeCliqueWeb?: string;
+  identificadorDoNavegador?: string;
+  ipDoContato?: string;
+  agenteDoNavegadorDoContato?: string;
+}
+
 /**
  * Uma conversão pronta para sair — no formato da CASA, não no da plataforma.
  *
@@ -76,6 +88,7 @@ export interface ConversaoOffline {
   cliqueDeOrigem: string | null;
   /** E.164 sem `+`, ainda EM CLARO: o hash é responsabilidade do transporte. */
   telefone: string | null;
+  identidade?: IdentidadeParaCorrespondencia;
   valorCentavos: number | null;
   moeda: string | null;
 }

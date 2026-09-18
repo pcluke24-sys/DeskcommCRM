@@ -218,6 +218,7 @@ async function handle(row: EventRow): Promise<HandlerResult> {
       evento === "Purchase" ? new Date(lead.closed_at ?? row.created_at ?? Date.now()) : ocorridoEm,
     cliqueDeOrigem,
     telefone,
+    identidade: leitura.atribuicao.identidade,
     // A coluna tem `DEFAULT 'BRL'` e um CHECK de ISO-4217; o fallback só cobre a
     // linha que teve a moeda apagada à mão.
     moeda: exigeValor ? (lead.currency ?? "BRL") : null,
