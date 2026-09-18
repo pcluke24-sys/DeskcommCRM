@@ -1,0 +1,73 @@
+# Exclusão de tenant suspenso
+
+CONFIRMADO por código: porta em Administração → Tenants → organização → Ações.
+A API DELETE /api/v1/admin/tenants/[id]/delete exige sessão de administrador de plataforma,
+escopo full, guarda de acompanhamento e RPC transacional que revalida o dono original
+(primeiro administrador full com autoconcessão), suspensão, slug e motivo sob lock.
+Não confundir administrador de organização com dono da instalação.
+
+A RPC não apaga usuários Auth. Cascatas existentes removem os registros do tenant.
+A auditoria permanece global com tenant_id e tenant_slug nos metadados.
+A organização principal explicitamente escolhida não pode ser removida. Associação
+do dono a organizações de clientes NÃO bloqueia a exclusão. A migração 9004 (antiga 0266 do fork) adiciona
+singleton de plataforma com FK RESTRICT; sem principal, exclusões falham fechadas.
+TenantActions oferece seleção com confirmação, somente ao dono; PUT primary chama
+fn_set_primary_organization, registra platform.primary_organization_updated visível
+na auditoria. Seleção e exclusão travam o mesmo singleton para evitar corridas.
+Erro conserva a seleção anterior e mostra toast; nenhum cron é necessário para
+configuração síncrona. Não há atuação de IA nesse controle administrativo.
+Sessões de WhatsApp devem ser
+removidas pela tela de conexões; calendários e integrações devem estar desconectados.
+
+Arquivos: somente storage.objects cujo nome começa com UUID exato + barra.
+Fila platform_tenant_deletion_storage é da plataforma e deliberadamente não referencia
+organizations: precisa sobreviver ao DELETE. RLS ativa, nenhum acesso anon/authenticated.
+Cron storage-redaction consome via drainTenantDeletionStorage; tentativas idempotentes,
+máximo 10; erro gera log e mantém linha failed para intervenção administrativa.
+Arquivos antigos fora da convenção de prefixo não são removidos automaticamente.
+
+Living System Checklist: entrada TenantActions; saída lista de tenants atualizada;
+registro tenant.deleted em api_audit_log e filtro de auditoria derivado de AUDIT_ACTIONS;
+porta detalhe já existente; anti-morte cron storage-redaction; configuração confirmação
+explícita; continuidade IA/humano não se aplica a encerramento administrativo;
+laço de retorno falha reverte transação, mantém modal aberto ou reprocessa fila.
+Mapa: docs/architecture/exclusao-de-tenant.architecture.json.
+
+Atualização 1.31.1 NÃO aplicada: comparação merge-tree encontrou conflitos em crm-summary,
+layout autenticado, ConversationHeader, KanbanCardActions, dicionário e mapa de jornadas.
+Na integração v1.32.1, nossas migrations foram renumeradas para 9001–9004 sem alterar timestamps ou SQL. Ver integracao-v1.32.1.md; publicação ainda depende dos testes.
+
+## Verificação e publicação — 17/09/2026
+
+Correção posterior publicada: runtime 756ca98b37e70d844f853132ba8a58c1c06ffbfc,
+checkout remoto 95f19a4f, Actions 35233615426 aprovado. Migration 0266 aplicada
+isoladamente, Bee Agency Ads marcada principal pela RPC auditada; RST continua
+suspensa e não principal. Nenhum tenant excluído. Domínio HTTP 307 e três serviços
+saudáveis. Backup: /root/DeskcommCRM/backups/primary-organization-20260917T164418Z.
+Tipos e lint dos arquivos alterados aprovados; 14 testes API/segurança e 149
+casos UI/arquitetura aprovados. Prova DB com rollback verifica principal/FK,
+associação do dono a cliente não bloqueante, isolamento e auditoria.
+Conferência visual de produção pendente: Edge bloqueou página ERR_BLOCKED_BY_CLIENT;
+nenhuma barreira contornada. Suíte integral/fresh Docker/e2e não rodada nesta correção.
+
+Runtime publicado: 5365fd19db251e9fb9451e622972b7e0691f7c4b. GitHub Actions
+35227876788 aprovou as três imagens, boot do aplicativo e imagens-ok. Commit
+2ed923a2 posterior altera somente o comentário ESLint do script operacional.
+VPS: app/worker/scheduler saudáveis; domínio público HTTP 307 após deploy.
+Backup protegido do banco, sessões WhatsApp, env e compose:
+/root/DeskcommCRM/backups/tenant-deletion-20260917T134153Z.
+Checkout remoto preserva compose personalizado e incorpora o commit como 38bd5e58.
+
+Prova real transacional com rollback: dono exclusivo, suspensão, slug, organização
+própria, conexão pendente, cascade em contatos/leads, segundo tenant intacto,
+usuários Auth preservados, fila de arquivos somente do prefixo alvo, auditoria e
+RPC não executável por authenticated. Migration reaplicada duas vezes.
+Tipos aprovados; 196 casos focados aprovados ao combinar arquitetura, diálogo,
+API, branding, auditoria e filtros do cliente admin. lint:channels aprovado.
+Varredura do cliente admin repetida isoladamente após timeout sob carga.
+
+Browser real: conta do dono vê Excluir tenant definitivamente no tenant já suspenso;
+diálogo exibe riscos, exige slug e motivo, confirmação inicialmente desabilitada.
+Teste cancelado; nenhum tenant real foi excluído.
+Suíte unitária integral interrompida após timeout de encerramento de worker sob
+carga; NÃO tratada como aprovada. Instalação fresca Docker local não executada.

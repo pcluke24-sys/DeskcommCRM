@@ -168,4 +168,4 @@ describe("Composer — colar imagem", () => {
 });
 
 // A fixture exercita um atendente autorizado a consultar modelos de mensagem.
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true, useAuth: () => ({ activeOrg: { ai_module_enabled: true } }) }));

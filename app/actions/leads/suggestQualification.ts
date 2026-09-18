@@ -1,6 +1,7 @@
 "use server";
 
 import { generateText } from "ai";
+import { supportWriteError } from "@/lib/impersonate/support";
 import { z } from "zod";
 
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
@@ -34,6 +35,7 @@ function extrairJson(texto: string): unknown {
 export async function suggestQualification(leadId: string): Promise<ResultadoDaSugestao> {
   const user = await loadAuthUser();
   if (!user) return { ok: false, error: "unauthenticated" };
+  if (supportWriteError(user.support)) return { ok: false, error: "somente_leitura" };
   const org = await resolveActiveOrg(user);
   if (!org) return { ok: false, error: "forbidden_tenant" };
 

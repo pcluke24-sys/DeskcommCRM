@@ -42,6 +42,8 @@ export interface TenantDetailResponse {
     organization: TenantOrganization;
     counts: TenantCounts;
     integrations: TenantIntegrations;
+    can_delete_tenant?: boolean;
+    primary_organization_id?: string | null;
   };
 }
 
@@ -52,8 +54,7 @@ export interface TenantDetailResponse {
 export function useTenantDetail(id: string) {
   return useQuery({
     queryKey: ["admin", "tenant", id] as const,
-    queryFn: () =>
-      apiClient.get<TenantDetailResponse>(`/api/v1/admin/tenants/${id}`),
+    queryFn: () => apiClient.get<TenantDetailResponse>(`/api/v1/admin/tenants/${id}`),
     staleTime: 60_000,
     enabled: !!id,
   });

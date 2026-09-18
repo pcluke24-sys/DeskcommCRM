@@ -66,7 +66,7 @@ describe("cadastro quando o provedor já abriu a sessão", () => {
     await preencherEEnviar(false);
 
     await waitFor(() =>
-      expect(replace).toHaveBeenCalledWith("/team/accept-invite/tok-123"),
+      expect(replace).toHaveBeenCalledWith("/auth/complete-invite"),
     );
   });
 

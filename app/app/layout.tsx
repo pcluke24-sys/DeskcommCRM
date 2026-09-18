@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { isMfaEnrolled, loadAuthUser, requiresMfa, resolveActiveOrg } from "@/lib/auth/server";
 import { DEFAULT_VISIBILITY_MODE, type VisibilityMode } from "@/lib/auth/types";
+import { clientePelaAgendaLigado } from "@/lib/schemas/settings";
 import { AuthProvider } from "@/hooks/auth/AuthProvider";
 import { AppShell } from "./_components/AppShell";
 import { EstiloDaMarcaDaOrganizacao } from "./_components/EstiloDaMarcaDaOrganizacao";
@@ -116,7 +117,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ?.visibility_mode;
     const aiModuleEnabled = (orgRow?.settings as { ai_module_enabled?: unknown } | null)
       ?.ai_module_enabled !== false;
-    activeOrg = { ...activeOrg, visibility_mode: mode ?? DEFAULT_VISIBILITY_MODE, ai_module_enabled: aiModuleEnabled };
+    activeOrg = {
+      ...activeOrg,
+      visibility_mode: mode ?? DEFAULT_VISIBILITY_MODE,
+      ai_module_enabled: aiModuleEnabled,
+      // Mesma linha de `settings` já lida acima — nenhuma consulta a mais.
+      cliente_pela_agenda: clientePelaAgendaLigado(orgRow?.settings),
+    };
 
     // `marcaDaInstalacao()` é memoizada por TTL no PROCESSO (`lib/branding/
     // instalacao.ts`), e a derivação da cor é cacheada por régua+semente em

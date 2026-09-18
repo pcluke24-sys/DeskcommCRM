@@ -1,11 +1,12 @@
 {
   "name": "Contratação de IA por organização",
+  "lanes": [{ "id": "platform", "label": "Plataforma" }],
   "nodes": [
-    { "id": "platform", "label": "Administrador da plataforma" },
-    { "id": "flag", "label": "organizations.settings.ai_module_enabled" },
-    { "id": "navigation", "label": "Sidebar, busca e onboarding" },
-    { "id": "runtime", "label": "resolveOrgLlmConfig: veto terminal antes do provedor" },
-    { "id": "audit", "label": "api_audit_log: tenant.ai_module_updated" }
+    { "id": "platform", "lane": "platform", "label": "Administrador da plataforma" },
+    { "id": "flag", "lane": "platform", "label": "organizations.settings.ai_module_enabled" },
+    { "id": "navigation", "lane": "platform", "label": "Sidebar, busca e onboarding" },
+    { "id": "runtime", "lane": "platform", "label": "resolveOrgLlmConfig: veto terminal antes do provedor" },
+    { "id": "audit", "lane": "platform", "label": "api_audit_log: tenant.ai_module_updated" }
   ],
   "edges": [
     { "from": "platform", "to": "flag" },

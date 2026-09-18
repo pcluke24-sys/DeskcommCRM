@@ -1,7 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 
-import { usePermission } from "@/hooks/auth/AuthProvider";
+import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
 
 import { apiClient } from "@/lib/api/client";
 
@@ -15,14 +15,13 @@ import { apiClient } from "@/lib/api/client";
  * trata `undefined` como "não afirme nada".
  */
 export function useAutomaticoAtivo() {
+  const moduloLiberado = useAuth().activeOrg?.ai_module_enabled !== false;
   const podeConsultar = usePermission("ai.automatico.view");
-  return useQuery({
-    enabled: podeConsultar,
+  const query = useQuery({
+    enabled: podeConsultar && moduloLiberado,
     queryKey: ["ai", "automatico-ativo"],
     queryFn: async () => {
-      const r = await apiClient.get<{ data: { ativo: boolean } }>(
-        "/api/v1/ai/automatico-ativo",
-      );
+      const r = await apiClient.get<{ data: { ativo: boolean } }>("/api/v1/ai/automatico-ativo");
       return r.data.ativo;
     },
     staleTime: 5 * 60_000,
@@ -30,4 +29,7 @@ export function useAutomaticoAtivo() {
     // aqui interromperia o atendimento por causa de um adjetivo.
     retry: 1,
   });
+  // Ausência comercial é um fato conhecido, não uma leitura que falhou.
+  // Sem isso a Fila oculta conversas "automatico" mesmo sem IA contratada.
+  return { ...query, data: moduloLiberado ? query.data : false };
 }
