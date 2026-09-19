@@ -1233,6 +1233,8 @@ else
   VERSAO_ALVO="latest"
   c_ylw "⚠ Não consegui descobrir a última versão publicada (rede?)."
   c_ylw "  Instalando pelo canal 'latest'. Depois rode: bash hostgator-setup-kit/update.sh"
+  c_ylw "  Se as imagens não estiverem acessíveis, elas serão construídas neste servidor."
+  c_ylw "  Esse fallback leva alguns minutos a mais, mas não interrompe a instalação."
 fi
 IMAGEM_APP_DEFAULT="${IMG_APP}:${VERSAO_ALVO}"
 
