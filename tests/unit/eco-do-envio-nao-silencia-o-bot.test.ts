@@ -189,7 +189,6 @@ const envelope = (p: WahaPayload): WahaEnvelope => ({
   session: "default",
   payload: p,
 });
-
 /** O eco do próprio envio, no formato `@lid_` do NOWEB. */
 const eco = (body: string): WahaPayload => ({
   id: "true_10200698331209@lid_3EB0C767D097E9ECA6B1",
@@ -370,4 +369,3 @@ describe("eco do envio da automação — reconhecido como nosso (#652)", () => 
     expect(messages.length).toBe(2);
   });
 });
-

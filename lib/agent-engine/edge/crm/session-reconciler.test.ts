@@ -24,7 +24,6 @@ describe("deveRetomarSessao", () => {
     },
   );
 });
-
 describe("redrive pré-go-live", () => {
   it("não envia se a releitura da configuração falha", async () => {
     const send = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response());
@@ -169,4 +168,3 @@ describe("resgate da fila — a mensagem da AUTOMAÇÃO é alcançada (#652)", (
     expect(send).not.toHaveBeenCalled();
   });
 });
-
