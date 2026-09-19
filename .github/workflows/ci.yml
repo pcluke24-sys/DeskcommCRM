@@ -25,7 +25,10 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # A suíte integrada 1.35 executa mais de 10,5 mil testes e mediu ~12m30 só
+    # no Vitest; somados typecheck, lint e setup, o teto antigo de 15 min
+    # cancelava o job já verde antes do resumo. O limite continua finito.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
 
