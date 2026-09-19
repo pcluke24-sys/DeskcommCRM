@@ -90,7 +90,13 @@ export function AgendaInterativa({
    */
   tipos: Array<{ id: string; nome: string; duracaoMin: number }>;
   onEscolherTipo: (id: string) => void;
-  onMarcarEm: (instante: string) => void;
+  /**
+   * O clique num bloco livre da grade. OPCIONAL de propósito: quem só lê não
+   * recebe esta prop, e a AUSÊNCIA dela é o que desmonta a interação inteira
+   * abaixo — oferecer o gesto a quem não pode executá-lo é oferecer um 403, que
+   * é o defeito que este PR fecha. `undefined` = grade de leitura.
+   */
+  onMarcarEm?: (instante: string) => void;
   onAbrirAgendamento?: (id: string) => void;
   className?: string;
 }) {
@@ -252,7 +258,10 @@ export function AgendaInterativa({
           {motivo === "sem-jornada" ? (
             <>
               <span className="font-semibold text-text">
-                {t("Você ainda não publicou seus horários de atendimento.")}
+                {/* Sem "Você": esta grade é a de quem a agenda mostra, que não é
+                    necessariamente quem está logado (o atendente abre a agenda
+                    da dona). Quem é, o cabeçalho acima já nomeia. */}
+                {t("A jornada de atendimento ainda não foi publicada.")}
               </span>{" "}
               {t("Sem eles ninguém consegue marcar clicando na grade — nem você, nem o agente.")}
             </>
@@ -321,7 +330,7 @@ export function AgendaInterativa({
         onAbrirAgendamento={onAbrirAgendamento}
         className="min-h-0 flex-1"
         interacao={
-          tipo
+          tipo && onMarcarEm
             ? {
                 horariosPorDia,
                 motivo,

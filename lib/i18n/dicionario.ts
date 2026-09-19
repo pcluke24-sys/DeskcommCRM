@@ -825,6 +825,25 @@ export const DICIONARIO: Traducoes = {
     },
   "Ex.: feriado": { es: "Ej.: feriado" },
   "Fechar este dia": { es: "Cerrar este día" },
+  "Dias fora da rotina": { es: "Días fuera de la rutina" },
+  "Feche um dia (feriado, férias, viagem) ou abra um dia que a sua jornada semanal não cobre. Em dia fechado o sistema deixa de oferecer horários, e o que já estava marcado continua marcado, para você decidir o que fazer com cada um.":
+    {
+      es: "Cierra un día (feriado, vacaciones, viaje) o abre un día que tu jornada semanal no cubre. En día cerrado el sistema deja de ofrecer horarios, y lo que ya estaba agendado sigue agendado, para que decidas qué hacer con cada uno.",
+    },
+  "O que fazer": { es: "Qué hacer" },
+  "Fechar o dia": { es: "Cerrar el día" },
+  "Abrir para atendimento": { es: "Abrir para atención" },
+  Das: { es: "Desde" },
+  "Abrir este dia": { es: "Abrir este día" },
+  "Repetir toda semana até (opcional)": { es: "Repetir cada semana hasta (opcional)" },
+  "dia(s) gravado(s)": { es: "día(s) guardado(s)" },
+  "já existia(m)": { es: "ya existía(n)" },
+  "A hora final precisa ser maior que a inicial.": {
+    es: "La hora final debe ser mayor que la inicial.",
+  },
+  "Nenhum dia fora da rotina daqui para a frente.": {
+    es: "Ningún día fuera de la rutina de aquí en adelante.",
+  },
   "Nenhum dia fechado daqui para a frente.": { es: "Ningún día cerrado de aquí en adelante." },
   "aberto excepcionalmente": { es: "abierto excepcionalmente" },
   "Abrir atendimento": { es: "Abrir atención" },
@@ -1857,8 +1876,10 @@ export const DICIONARIO: Traducoes = {
   "Início do fluxo": { es: "Inicio del flujo" },
   min: { es: "min" },
   adaptativo: { es: "adaptativo" },
+  "regra · uma saída por regra": { es: "regla · una salida por regla" },
   "regras · uma saída por regra": { es: "reglas · una salida por regla" },
-  "condição(ões)": { es: "condición(es)" },
+  condição: { es: "condición" },
+  condições: { es: "condiciones" },
   E: { es: "Y" },
   OU: { es: "O" },
   classes: { es: "clases" },
@@ -1999,6 +2020,28 @@ export const DICIONARIO: Traducoes = {
   "Etapa que dispara o fluxo": { es: "Etapa que dispara el flujo" },
   "Carregando etapas…": { es: "Cargando etapas…" },
   "Escolha a etapa": { es: "Elige la etapa" },
+  "Nenhuma etapa ativa encontrada — crie o funil antes de usar esta regra.": {
+    es: "No se encontró ninguna etapa activa — crea el embudo antes de usar esta regla.",
+  },
+  "A etapa escolhida não está mais na lista de etapas ativas — foi arquivada ou apagada. Escolha outra.":
+    {
+      es: "La etapa elegida ya no está en la lista de etapas activas — fue archivada o eliminada. Elige otra.",
+    },
+  "Esta regra vale para todo contato. A saída dela leva todo mundo, e as saídas seguintes nunca são usadas.":
+    {
+      es: "Esta regla vale para todo contacto. Su salida se lleva a todos, y las salidas siguientes nunca se usan.",
+    },
+  "Não consegui carregar as etapas agora. O que estava escolhido continua salvo — recarregue a página para escolher outra.":
+    {
+      es: "No pude cargar las etapas ahora. Lo que estaba elegido sigue guardado — recarga la página para elegir otra.",
+    },
+  "foi digitado à mão e não é uma etapa do funil. Escolha a etapa na lista — do jeito que está, esta regra nunca decide nada.":
+    {
+      es: "se escribió a mano y no es una etapa del embudo. Elige la etapa en la lista — tal como está, esta regla nunca decide nada.",
+    },
+  "Esta regra não aponta para uma etapa ativa do funil. Abra o nó e escolha a etapa na lista.": {
+    es: "Esta regla no apunta a una etapa activa del embudo. Abre el nodo y elige la etapa en la lista.",
+  },
   "Nenhuma etapa ativa encontrada — crie o funil antes de armar este gatilho.": {
     es: "No se encontró ninguna etapa activa — crea el embudo antes de configurar este disparador.",
   },
@@ -2106,7 +2149,12 @@ export const DICIONARIO: Traducoes = {
   Não: { es: "No" },
   Sempre: { es: "Siempre" },
   "Nenhuma delas": { es: "Ninguna de ellas" },
+  "Outros casos": { es: "Otros casos" },
   "Sem resposta": { es: "Sin respuesta" },
+  // Rótulos das saídas do nó de repetição: chegaram por outra branch e nunca
+  // entraram aqui, então o card do repeat aparecia meio em português no espanhol.
+  "Próxima volta": { es: "Siguiente vuelta" },
+  Acabou: { es: "Terminó" },
   Salvo: { es: "Guardado" },
   "Reindexação enfileirada — atualizando em segundo plano.": {
     es: "Reindexación en cola — actualizando en segundo plano.",
@@ -4632,6 +4680,22 @@ export const DICIONARIO: Traducoes = {
   "Quem recebe o cliente novo": { es: "Quién recibe al cliente nuevo" },
   "Vale para conversa que chega sem dono.": { es: "Vale para conversación que llega sin dueño." },
   "Tentativas antes de desistir": { es: "Intentos antes de desistir" },
+  "Quando a pessoa some, a IA volta?": { es: "Cuando la persona desaparece, ¿la IA vuelve?" },
+  "Quando alguém assume uma conversa, o agente de IA para de responder nela até ser devolvido. Se ninguém devolve, o cliente que escreve de novo fica sem resposta.":
+    {
+      es: "Cuando alguien asume una conversación, el agente de IA deja de responder en ella hasta que se la devuelvan. Si nadie la devuelve, el cliente que vuelve a escribir se queda sin respuesta.",
+    },
+  "Devolver ao agente sozinho depois de um tempo sem resposta da equipe": {
+    es: "Devolver al agente por sí solo tras un tiempo sin respuesta del equipo",
+  },
+  "O tempo conta a partir do último sinal de uma pessoa na conversa: assumir, responder pela tela ou pelo celular. Só devolve onde há agente publicado. Desligado, vale a regra de sempre: a IA só volta quando alguém clica em Devolver.":
+    {
+      es: "El tiempo cuenta desde la última señal de una persona en la conversación: asumir, responder por la pantalla o por el celular. Solo devuelve donde hay un agente publicado. Apagado, vale la regla de siempre: la IA solo vuelve cuando alguien hace clic en Devolver.",
+    },
+  "Minutos sem resposta da equipe": { es: "Minutos sin respuesta del equipo" },
+  "Entre 5 minutos e 24 horas. Sessenta minutos é a ordem de grandeza de um atendimento humano.": {
+    es: "Entre 5 minutos y 24 horas. Sesenta minutos es el orden de magnitud de una atención humana.",
+  },
   "Quando não há ninguém disponível, o sistema tenta de novo mais tarde. Ao estourar, a conversa fica na fila esperando alguém.":
     {
       es: "Cuando no hay nadie disponible, el sistema lo intenta de nuevo más tarde. Al agotarse, la conversación queda en la fila esperando a alguien.",
@@ -4689,6 +4753,11 @@ export const DICIONARIO: Traducoes = {
   "De plantão": { es: "De guardia" },
   "Fora do horário": { es: "Fuera del horario" },
   Desligado: { es: "Apagado" },
+  // ── Presença do navegador (issue #996): o segundo selo da mesma célula, o
+  //    que responde "tem alguém aí?" sem tocar na decisão de plantão.
+  "Com a tela aberta": { es: "Con la pantalla abierta" },
+  "Sem sinal de tela": { es: "Sin señal de pantalla" },
+  "último sinal às": { es: "última señal a las" },
   "Atualizando para a versão": { es: "Actualizando a la versión" },
   // ── A espera antes de o servidor pegar o pedido, e o fim reconhecido na hora.
   //    Os dois estados que a tela ganhou quando parou de fingir que a conversa
@@ -4713,13 +4782,18 @@ export const DICIONARIO: Traducoes = {
   "Pode fechar esta página: o pedido já está registrado e não se perde.": {
     es: "Puedes cerrar esta página: el pedido ya está registrado y no se pierde.",
   },
-  "Pronto — você está na versão": { es: "Listo — estás en la versión" },
-  "A atualização terminou e o sistema já está no ar na versão": {
-    es: "La actualización terminó y el sistema ya está en línea en la versión",
-  },
-  "O servidor confirma isso na próxima vez que falar comigo, daqui a alguns minutos — até lá, esta tela já sabe.":
+  // As três frases que a janela do `just_updated` usava saíram junto com a
+  // promoção da versão do run a "instalada" (issue 1101): elas afirmavam uma
+  // versão que o host não confirmou. No lugar delas, o que a tela pode dizer é
+  // que o PEDIDO terminou e qual é a última versão que o host confirmou.
+  terminou: { es: "terminó" },
+  "O servidor ainda não me confirmou em que versão ele voltou ao ar — a última versão que ele confirmou é a":
     {
-      es: "El servidor lo confirma la próxima vez que hable conmigo, en unos minutos — hasta entonces, esta pantalla ya lo sabe.",
+      es: "El servidor todavía no me confirmó en qué versión volvió a estar en línea — la última versión que él confirmó es la",
+    },
+  "Assim que ele falar comigo, daqui a alguns minutos, esta tela se atualiza sozinha. Não ofereço atualizar de novo: o pedido já foi atendido.":
+    {
+      es: "En cuanto hable conmigo, dentro de unos minutos, esta pantalla se actualiza sola. No te ofrezco actualizar otra vez: el pedido ya fue atendido.",
     },
   "O sistema sai do ar por alguns instantes e volta sozinho. Pode deixar esta página aberta.": {
     es: "El sistema se apaga por unos instantes y vuelve solo. Puedes dejar esta página abierta.",
@@ -5286,6 +5360,7 @@ export const DICIONARIO: Traducoes = {
   Posição: { es: "Posición" },
   "na fila": { es: "en la cola" },
   "Última mensagem do cliente": { es: "Último mensaje del cliente" },
+  "Desde quando o cliente espera resposta": { es: "Desde cuándo el cliente espera respuesta" },
   Arquivada: { es: "Archivada" },
   "Aguardando o cliente": { es: "Esperando al cliente" },
 
@@ -7757,8 +7832,11 @@ export const DICIONARIO: Traducoes = {
     es: "La última respuesta se vuelve el número de vueltas (ej.: 4 hijos). El tope evita un bucle sin fin.",
   },
   "(adaptativo)": { es: "(adaptativo)" },
-  "classes · grace": { es: "clases · grace" },
-  "regras · grace": { es: "reglas · grace" },
+  "classe · espera": { es: "clase · espera" },
+  "classes · espera": { es: "clases · espera" },
+  "regra · espera": { es: "regla · espera" },
+  "regras · espera": { es: "reglas · espera" },
+  volta: { es: "vuelta" },
   "grava resposta": { es: "guarda la respuesta" },
   "pula se já existir": { es: "salta si ya existe" },
   "confirma se já existir": { es: "confirma si ya existe" },
@@ -7880,9 +7958,9 @@ export const DICIONARIO: Traducoes = {
     es: "Consulta este material antes de responder sobre tu negocio.",
   },
   "Que tipo de material é": { es: "Qué tipo de material es" },
-  "PDF, Markdown ou texto, até 20 MB. Um PDF só de imagens escaneadas não tem letra nenhuma para ler — envie uma versão com texto selecionável.":
+  "PDF, Markdown, CSV ou texto, até 20 MB. Um PDF só de imagens escaneadas não tem letra nenhuma para ler — envie uma versão com texto selecionável. Planilha Excel? Salve como CSV primeiro.":
     {
-      es: "PDF, Markdown o texto, hasta 20 MB. Un PDF solo de imágenes escaneadas no tiene ninguna letra para leer — envía una versión con texto seleccionable.",
+      es: "PDF, Markdown, CSV o texto, hasta 20 MB. Un PDF solo de imágenes escaneadas no tiene ninguna letra para leer — envía una versión con texto seleccionable. ¿Planilla de Excel? Guárdala como CSV primero.",
     },
   "…ou cole o texto aqui": { es: "…o pega el texto aquí" },
   "Sem uma chave da OpenAI, o material fica guardado e esperando — o agente só passa a conhecê-lo depois que a chave for cadastrada.":
@@ -7919,6 +7997,24 @@ export const DICIONARIO: Traducoes = {
   },
   "Sem eles ninguém consegue marcar clicando na grade — nem você, nem o agente.": {
     es: "Sin ellos nadie puede agendar haciendo clic en la grilla — ni tú, ni el agente.",
+  },
+  // #896: a jornada de atendimento que ainda não foi publicada — DOIS textos, um
+  // com ponto final (painel da grade) e outro sem (painel de marcação), e o
+  // "Sem eles..." da tela de quem atende sem poder de gerente.
+  "A jornada de atendimento ainda não foi publicada.": {
+    es: "La jornada de atención todavía no fue publicada.",
+  },
+  "A jornada de atendimento ainda não foi publicada": {
+    es: "La jornada de atención todavía no fue publicada",
+  },
+  // #1107 (item 5): a frase da folga chega à tela por LITERAL
+  // (PainelDeMarcacao.tsx) — `t(variável)` escapava do guarda que varre
+  // `t("literal")`, e a frase ficava sem cobrança em espanhol.
+  "Este dia está fora da jornada publicada (folga ou dia sem expediente).": {
+    es: "Este día está fuera de la jornada publicada (día libre o sin horario de atención).",
+  },
+  "Sem eles ninguém consegue marcar — nem quem atende, nem o agente.": {
+    es: "Sin ellos nadie puede agendar — ni quien atiende, ni el agente.",
   },
   "Não consegui carregar os horários.": { es: "No pude cargar los horarios." },
   "Os blocos ficam bloqueados até eu conseguir — é mais seguro que oferecer um horário que talvez não exista.":
@@ -8645,9 +8741,9 @@ export const DICIONARIO: Traducoes = {
     {
       es: "Las dudas que se repiten, con la respuesta lista. Es el formato que el agente cita mejor, porque cada respuesta llega entera.",
     },
-  "Um texto do seu negócio — política de troca, tabela de preços, manual, contrato. Envie o arquivo (PDF, Markdown ou texto) ou cole o conteúdo.":
+  "Um texto do seu negócio — política de troca, tabela de preços, manual, contrato. Envie o arquivo (PDF, Markdown, CSV ou texto) ou cole o conteúdo.":
     {
-      es: "Un texto de tu negocio — política de cambios, lista de precios, manual, contrato. Envía el archivo (PDF, Markdown o texto) o pega el contenido.",
+      es: "Un texto de tu negocio — política de cambios, lista de precios, manual, contrato. Envía el archivo (PDF, Markdown, CSV o texto) o pega el contenido.",
     },
   "Conversas anteriores": { es: "Conversaciones anteriores" },
   "Atendimentos já resolvidos que alguém marcou como aproveitáveis, com os dados pessoais removidos.":
@@ -8667,6 +8763,11 @@ export const DICIONARIO: Traducoes = {
   // ("Peso mexicano") por chave DINÂMICA, que o guarda do AST não enxerga —
   // passariam no CI e cairiam no português na tela em espanhol.
   Moeda: { es: "Moneda" },
+  País: { es: "País" },
+  "De onde saem o documento do contato, a lei citada no documento de acesso e o prazo em dias úteis. Só aparecem países com a lei revisada — a lista é curta de propósito.":
+    {
+      es: "De aquí salen el documento del contacto, la ley citada en el documento de acceso y el plazo en días hábiles. Solo aparecen países con la ley revisada: la lista es corta a propósito.",
+    },
   "Vale para todo preço do catálogo. Produto já cadastrado guarda a moeda com que nasceu.": {
     es: "Vale para todo precio del catálogo. Un producto ya cargado conserva la moneda con la que nació.",
   },
@@ -9043,6 +9144,14 @@ export const DICIONARIO: Traducoes = {
   CTR: { es: "CTR" },
   Frequência: { es: "Frecuencia" },
   CPC: { es: "CPC" },
+  // Coluna derivada nova (issue #920). O rótulo fica em inglês, como "Hook
+  // Rate", "CPC" e "CTR": é o nome que o operador vê no Gerenciador de
+  // Anúncios, e traduzir só aqui faria a mesma coluna ter dois nomes entre a
+  // tela e o print que ele manda para o cliente. A fórmula vai no `title`.
+  "Connect rate": { es: "Connect rate" },
+  "Visualizações da página ÷ cliques no link": {
+    es: "Visualizaciones de la página ÷ clics en el enlace",
+  },
   "Hook Rate": { es: "Hook Rate" },
   "(reproduções)": { es: "(reproducciones)" },
   "Reproduções de vídeo ÷ impressões": { es: "Reproducciones de video ÷ impresiones" },
@@ -9220,6 +9329,30 @@ export const DICIONARIO: Traducoes = {
   "Salvar conexão": { es: "Guardar conexión" },
   "Preencha o identificador e o token para poder salvar.": {
     es: "Completa el identificador y el token para poder guardar.",
+  },
+
+  // ─── Configurações → Conversões: card do Google Ads (migration 0307) ───
+  "Google Ads": { es: "Google Ads" },
+  "Autorize o acesso à conta de anúncios do Google. Depois de autorizar, você informa aqui qual conta e qual ação de conversão recebem as vendas.":
+    {
+      es: "Autoriza el acceso a la cuenta publicitaria de Google. Después de autorizar, indicas aquí qué cuenta y qué acción de conversión reciben las ventas.",
+    },
+  "Conectar com Google": { es: "Conectar con Google" },
+  "Conta de anúncios (Customer ID)": { es: "Cuenta publicitaria (Customer ID)" },
+  "10 dígitos. Com ou sem hífen — tanto faz, a gente limpa.": {
+    es: "10 dígitos. Con o sin guion — da igual, nosotros lo limpiamos.",
+  },
+  "Conta de gerente (opcional)": { es: "Cuenta de gerente (opcional)" },
+  "Preencha só se você acessa a conta acima através de uma conta MCC/gerente.": {
+    es: "Completa solo si accedes a la cuenta de arriba a través de una cuenta MCC/gerente.",
+  },
+  "Ação de conversão": { es: "Acción de conversión" },
+  "O ID da ação de conversão dentro da conta acima, que vai receber os envios de venda.": {
+    es: "El ID de la acción de conversión dentro de la cuenta de arriba, que va a recibir los envíos de venta.",
+  },
+  "Enviar vendas para o Google Ads": { es: "Enviar ventas a Google Ads" },
+  "Google Ads autorizado. Agora informe a conta e a ação de conversão abaixo.": {
+    es: "Google Ads autorizado. Ahora indica la cuenta y la acción de conversión abajo.",
   },
 
   // Convidado do compromisso (agenda)
@@ -9436,12 +9569,26 @@ export const DICIONARIO: Traducoes = {
     es: "Pega el contenido del material antes de crear.",
   },
   "Consulta inválida.": { es: "Consulta inválida." },
-  "Credential referenciada (FK ON DELETE RESTRICT). Remova as versões antes.": {
-    es: "Credential referenciada (FK ON DELETE RESTRICT). Elimina las versiones antes.",
+  // Tela de credentials — editar/rotacionar a chave (PATCH). O texto da RECUSA
+  // do DELETE não entra aqui: ele interpola a contagem e os nomes dos agentes,
+  // então é montado em runtime e não tem chave fixa para traduzir.
+  "Editar credencial": { es: "Editar credencial" },
+  "Nova chave (opcional)": { es: "Clave nueva (opcional)" },
+  "Em branco mantém a chave atual": { es: "En blanco mantiene la clave actual" },
+  "Chave salva. Validando…": { es: "Clave guardada. Validando…" },
+  "Chave trocada. A validação segue em segundo plano.": {
+    es: "Clave cambiada. La validación sigue en segundo plano.",
   },
-  "Credential é usada por uma versão publicada de agent. Despublique antes de deletar.": {
-    es: "La credential es usada por una versión publicada de agent. Despublica antes de eliminar.",
+  "Credencial atualizada.": { es: "Credencial actualizada." },
+  "Trocar a chave aqui mantém os agentes ligados nela: no próximo atendimento eles já usam a chave nova. Deixe a chave em branco para mudar só o nome.":
+    {
+      es: "Cambiar la clave aquí mantiene los agentes conectados a ella: en la próxima atención ya usan la clave nueva. Deja la clave en blanco para cambiar solo el nombre.",
+    },
+  "versão(ões) de agente": { es: "versión(es) de agente" },
+  "Para trocar a chave, use editar; para excluir, aponte essas versões para outra chave.": {
+    es: "Para cambiar la clave, usa editar; para eliminar, apunta esas versiones a otra clave.",
   },
+  "Esta ação não pode ser desfeita.": { es: "Esta acción no se puede deshacer." },
   "Cursor inválido.": { es: "Cursor inválido." },
   "Dê um nome ao material (2 a 120 caracteres).": {
     es: "Ponle un nombre al material (2 a 120 caracteres).",
@@ -9525,9 +9672,13 @@ export const DICIONARIO: Traducoes = {
   "Esse funil não está mais na sua lista. Recarregue a página e tente de novo.": {
     es: "Ese embudo ya no está en tu lista. Recarga la página e intenta de nuevo.",
   },
-  "Não sei ler esse tipo de arquivo. Envie PDF, Markdown (.md) ou texto (.txt).": {
-    es: "No sé leer ese tipo de archivo. Envía PDF, Markdown (.md) o texto (.txt).",
+  "Não sei ler esse tipo de arquivo. Envie PDF, Markdown (.md), CSV (.csv) ou texto (.txt).": {
+    es: "No sé leer ese tipo de archivo. Envía PDF, Markdown (.md), CSV (.csv) o texto (.txt).",
   },
+  'Não leio Excel diretamente — no Excel use "Salvar como" → "CSV UTF-8 (delimitado por vírgulas)" e envie o CSV.':
+    {
+      es: 'No leo Excel directamente — en Excel usa "Guardar como" → "CSV UTF-8 (delimitado por comas)" y envía el CSV.',
+    },
   "não consegui extrair texto deste PDF. Se ele for só imagens escaneadas, não há letra nenhuma para ler — envie uma versão com texto selecionável.":
     {
       es: "no conseguí extraer texto de este PDF. Si son solo imágenes escaneadas, no hay ninguna letra para leer — envía una versión con texto seleccionable.",
@@ -10426,10 +10577,9 @@ export const DICIONARIO: Traducoes = {
   "Conecte a loja para trazer pedidos e clientes para dentro do CRM.": {
     es: "Conecta la tienda para traer pedidos y clientes al CRM.",
   },
-  "Devolver ao anúncio as vendas que ele trouxe, para ele aprender a procurar mais clientes parecidos.":
-    {
-      es: "Devolver al anuncio las ventas que trajo, para que aprenda a buscar más clientes parecidos.",
-    },
+  "Devolver ao anúncio as vendas que ele trouxe, e marcar a origem de quem chega pelo site.": {
+    es: "Devolver al anuncio las ventas que trajo, y marcar el origen de quien llega por el sitio.",
+  },
   "Funil e performance por atendente nos últimos 30 dias.": {
     es: "Embudo y rendimiento por agente en los últimos 30 días.",
   },
@@ -11134,6 +11284,37 @@ export const DICIONARIO: Traducoes = {
     es: "Materiales marcados aquí fueron archivados en el acervo — el agente ya no los lee.",
   },
   "Desmarque para voltar a salvar.": { es: "Desmárcalo para volver a guardar." },
+  // ── Erros do acervo de conhecimento que CHEGAM À TELA ──────────────────────
+  // Eles saem de `lib/ai/rag/extractors/csv.ts` e de `lib/ai/rag/ingest/documento.ts`
+  // e são renderizados por `t(err.message)` na rota de upload. O gate de espanhol
+  // NÃO alcança `app/api/**` (a varredura ignora a pasta), então quem garante a
+  // tradução aqui é esta entrada, não o CI — por isso ela vem com este comentário.
+  "a planilha está vazia": { es: "la planilla está vacía" },
+  "a planilha só tem cabeçalho, sem linha de dado nenhuma": {
+    es: "la planilla solo tiene encabezado, sin ninguna fila de datos",
+  },
+  "nenhuma linha tem conteúdo para indexar": {
+    es: "ninguna fila tiene contenido para indexar",
+  },
+  'não leio Excel diretamente — no Excel use "Salvar como" → "CSV UTF-8 (delimitado por vírgulas)" e envie o CSV.':
+    {
+      es: 'no leo Excel directamente — en Excel usa "Guardar como" → "CSV UTF-8 (delimitado por comas)" y envía el CSV.',
+    },
+  // As chaves do gatilho de dias até a data do funil. Medidas pela tela em
+  // `tests/unit/i18n-espanhol-cobre-a-tela.test.ts`: sem elas o gatilho novo
+  // sairia inteiro em português para quem escolheu espanhol.
+  "Funil do campo": { es: "Embudo del campo" },
+  "Campo de data": { es: "Campo de fecha" },
+  "Escolha o campo": { es: "Elige el campo" },
+  "Faltam N dias": { es: "Faltan N días" },
+  "O aviso sai no dia em que faltarem N dias para a data, uma vez por negócio. Para avisar DEPOIS da data, use N negativo — -60 confirma a entrega 60 dias após o casamento.":
+    {
+      es: "El aviso sale el día en que falten N días para la fecha, una vez por negocio. Para avisar DESPUÉS de la fecha, usa N negativo — -60 confirma la entrega 60 días después de la boda.",
+    },
+  "Este funil ainda não tem campo de data. Cadastre um em Funis → Campos personalizados para poder escolhê-lo aqui.":
+    {
+      es: "Este embudo aún no tiene campo de fecha. Registra uno en Embudos → Campos personalizados para poder elegirlo aquí.",
+    },
   // Do PR #773 (@xxjjjj): o aria-label do alternador de tema e as frases da
   // agenda que passaram a sair por t(). As três de "este horário…" são as
   // razões dinâmicas de `razaoDoBloco` — o gate de espanhol não as enxerga.
@@ -11154,6 +11335,45 @@ export const DICIONARIO: Traducoes = {
   "o compromisso": { es: "la cita" },
   Entendi: { es: "Entendido" },
   "e-mail do convidado inválido": { es: "correo del invitado no válido" },
+
+  // ─── issue #924 — a origem de quem chega pelo site ───
+  // app/app/settings/conversoes/page.tsx (a explicação do link) e
+  // app/app/contacts/_client.tsx (o filtro de origem que passou a ter "Site").
+  "Site (landing page)": { es: "Sitio (landing page)" },
+  "Quem chegou pelo site": { es: "Quién llegó por el sitio" },
+  "Quando a pessoa vê a campanha numa página sua e toca num botão que abre o WhatsApp, o link desse botão pode levar a origem junto. O código abaixo vai no texto da mensagem, e a conversa entra no CRM já com a origem do site.":
+    {
+      es: "Cuando la persona ve la campaña en una página tuya y toca un botón que abre WhatsApp, el enlace de ese botón puede llevar el origen consigo. El código de abajo va en el texto del mensaje, y la conversación entra al CRM ya con el origen del sitio.",
+    },
+  "Como montar o link do botão": { es: "Cómo armar el enlace del botón" },
+  "Monte o texto que a pessoa vai enviar — uma saudação basta — e termine com o código.": {
+    es: "Arma el texto que la persona va a enviar — un saludo basta — y termínalo con el código.",
+  },
+  "Troque o número pelo WhatsApp da empresa e o texto pelo seu, mantendo o código no fim:": {
+    es: "Cambia el número por el WhatsApp de la empresa y el texto por el tuyo, manteniendo el código al final:",
+  },
+  "Olá! Vim pelo site.": { es: "¡Hola! Vengo del sitio." },
+  "Este exemplo foi gerado por esta tela. Os campos que o código aceita são utm_source, utm_medium, utm_campaign, utm_term, utm_content, gclid e fbclid.":
+    {
+      es: "Este ejemplo fue generado por esta pantalla. Los campos que el código acepta son utm_source, utm_medium, utm_campaign, utm_term, utm_content, gclid y fbclid.",
+    },
+  "O código vale só na primeira mensagem do contato: quem recebe um link encaminhado não ganha a origem de quem encaminhou.":
+    {
+      es: "El código vale solo en el primer mensaje del contacto: quien recibe un enlace reenviado no hereda el origen de quien lo reenvió.",
+    },
+  "Ele nunca sobrescreve uma origem já gravada, inclusive a de anúncio: quem chegou do Meta ou do Google antes mantém o anúncio.":
+    {
+      es: "Nunca sobrescribe un origen ya guardado, incluido el de anuncio: quien llegó de Meta o de Google antes conserva el anuncio.",
+    },
+  "Só campos de campanha viajam no código, e nenhum dado pessoal: nome, telefone, e-mail e documento ficam de fora.":
+    {
+      es: "Solo viajan campos de campaña en el código, y ningún dato personal: nombre, teléfono, correo y documento quedan fuera.",
+    },
+  "O código inteiro tem um teto de": { es: "El código entero tiene un tope de" },
+  "caracteres.": { es: "caracteres." },
+  'A origem aparece na ficha do contato e no filtro "Site (landing page)" da lista de contatos.': {
+    es: 'El origen aparece en la ficha del contacto y en el filtro "Sitio (landing page)" de la lista de contactos.',
+  },
 };
 
 /**
