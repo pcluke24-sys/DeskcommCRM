@@ -49,8 +49,10 @@ const ACTION = join(process.cwd(), ".github/actions/preparar-node/action.yml");
  */
 const TETOS: Record<string, { minutos: number; razao: string }> = {
   "ci.yml::verify": {
-    minutos: 15,
-    razao: "trabalho real medido: p90 594s, máximo 609s em 51 verdes — folga de ~4m45",
+    minutos: 20,
+    razao:
+      "na integração 1.35, 10.516 testes mediram 744s no Vitest e o job de 15 min foi cancelado; " +
+      "20 min deixam folga finita para typecheck, lint e setup sem esconder crescimento futuro",
   },
   // O agregado `invariants` NÃO tem teto de propósito: ele não roda a suíte, só
   // lê o desfecho de `needs`. O teto que denuncia a suíte crescendo vive na perna
