@@ -148,6 +148,7 @@ backups/
 .qa-backups/
 *.dump
 integration-*.log
+.prova/
 
 # Marca do kit: a senha das rotinas que vazou no log já foi trocada (#1054)
 .deskcomm-segredo-do-cron-trocado
