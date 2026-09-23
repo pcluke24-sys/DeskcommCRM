@@ -185,9 +185,9 @@ jobs:
       fail-fast: false
       # Cinco stacks Supabase baixando as mesmas imagens ao mesmo tempo atingem
       # o rate limit público do GHCR antes de qualquer teste abrir o produto.
-      # Duas partes em paralelo preservam o ganho da matriz sem transformar a
-      # infraestrutura externa em falso vermelho do CRM.
-      max-parallel: 2
+      # A fila serial evita que a infraestrutura externa vire falso vermelho;
+      # cada parte continua com runner e limite de tempo próprios.
+      max-parallel: 1
       matrix:
         parte: [1, 2, 3, 4, 5]
     # ─────────────────────────────────────────────────────────────────────────
