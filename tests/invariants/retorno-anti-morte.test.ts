@@ -150,6 +150,26 @@ describe("agendar o retorno — o próximo passo existe e é visível", () => {
       psql(`select count(*) from cron_jobs where organization_id='${ORG_A}' and contact_id='${CONTATO}';`),
     ).toBe("1");
   });
+
+  it("não empilha outro retorno enquanto o primeiro já disparou mas ainda aguarda envio", async () => {
+    const cron = psql(`select id from cron_jobs where organization_id='${ORG_A}' and contact_id='${CONTATO}' limit 1;`);
+    await pool.query(
+      `insert into job_queue (organization_id, contact_id, kind, status, run_after, payload)
+       select organization_id, contact_id, 'followup_turn', 'pending', next_run_at,
+              payload || jsonb_build_object('cron_job_id', id)
+         from cron_jobs where id = $1`,
+      [cron],
+    );
+    await pool.query(`update cron_jobs set enabled=false where id=$1`, [cron]);
+
+    const r = await agendaComoOMotor("2026-08-07T14:00:00.000Z");
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("esperava recusa");
+    expect(r.error.code).toBe("already_pending");
+    expect(
+      psql(`select count(*) from cron_jobs where organization_id='${ORG_A}' and contact_id='${CONTATO}';`),
+    ).toBe("1");
+  });
 });
 
 describe("cancelar o retorno — o humano decide e o agente descobre", () => {

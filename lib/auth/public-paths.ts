@@ -7,6 +7,20 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/login(\/.*)?$/,
   /^\/signup$/,
   /^\/auth\/confirm$/,
+  // A VOLTA DA ENTRADA COM GOOGLE (issue #1388). Quem chega aqui é o NAVEGADOR
+  // que o Google devolveu, via 302 do GoTrue — navegação vinda de outro site,
+  // onde o cookie de sessão (`sameSite: "strict"`) não viaja por definição.
+  // Sem esta linha o `proxy` responde 307 para `/login` antes de a rota
+  // existir, e o fluxo NUNCA completa: mesma classe medida na v1.8.0, em
+  // produção, com o callback da agenda (`GET /api/v1/agenda/google/callback`
+  // → 401 `unauthenticated`).
+  //
+  // A identidade NÃO vem da sessão: vem do `code` que o GoTrue assinou, trocado
+  // por sessão DENTRO da rota (`exchangeCodeForSession`), que só fecha se o
+  // verificador de PKCE gravado na ida voltar — em cookie `Lax`, ver
+  // `createClientDeEntradaComGoogle`. Âncora `$` de propósito: nenhum sub-path
+  // futuro nasce público de carona.
+  /^\/auth\/callback$/,
   /^\/403$/,
   /^\/admin\/forbidden$/,
   /^\/404$/,
@@ -25,6 +39,10 @@ export const PUBLIC_PATHS: RegExp[] = [
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
   /^\/api\/v1\/system\/agent$/,
+  // Provisionamento de organização por sistema externo: Bearer do segredo da
+  // instalação (`TENANT_PROVISIONING_SECRET`), checado dentro da rota, que
+  // responde 404 enquanto o segredo não existe. Sem cookie, igual /cron/.
+  /^\/api\/v1\/tenants\/provision$/,
   // Relógio Hobby (GitHub Actions / cron-job.org). Auth é Bearer na própria
   // rota — sem isto o proxy devolve 401 e o follow-up waiting_reply nunca anda.
   /^\/api\/v1\/system\/relogio\/tick$/,

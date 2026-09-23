@@ -64,6 +64,10 @@ unset _deskcomm_chamador
 # Todo `docker compose` do kit passa por aqui: com proxy externo, um comando sem
 # o override subiria o Caddy e ele iria bater de frente com o proxy da hospedagem.
 dc() {
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    docker compose -f "$COMPOSE" -f docker-compose.single-server.yml "$@"
+    return
+  fi
   case "${REVERSE_PROXY:-caddy}" in
   traefik) docker compose -f "$COMPOSE" -f "$COMPOSE_TRAEFIK" "$@" ;;
   npm)     docker compose -f "$COMPOSE" -f "$COMPOSE_NPM" "$@" ;;
@@ -75,11 +79,358 @@ dc() {
 # dono. Se a mensagem omitisse o override numa instalação com proxy externo, o
 # próprio dono derrubaria o site seguindo a instrução do kit.
 dc_files() {
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    printf -- '-f %s -f %s' "$COMPOSE" docker-compose.single-server.yml
+    return
+  fi
   case "${REVERSE_PROXY:-caddy}" in
   traefik) printf -- '-f %s -f %s' "$COMPOSE" "$COMPOSE_TRAEFIK" ;;
   npm)     printf -- '-f %s -f %s' "$COMPOSE" "$COMPOSE_NPM" ;;
   *)       printf -- '-f %s' "$COMPOSE" ;;
   esac
+}
+
+# psql/pg_dump efêmeros. No modo single-server o Postgres só é alcançável pela
+# bridge privada (supabase-db), nunca por porta pública.
+pg_container() {
+  local -a rede=()
+  [ -n "${PSQL_DOCKER_NETWORK:-}" ] && rede=(--network "$PSQL_DOCKER_NETWORK")
+  docker run --rm ${rede[@]+"${rede[@]}"} "$@"
+}
+
+# ── MODO SINGLE-SERVER: o Supabase que o kit instala e opera ─────────────────
+#
+# Só vale com SINGLE_SERVER=1 (install-single-server.sh). Nada aqui roda numa
+# instalação comum: todo call site pergunta pelo modo antes.
+#
+# A versão do Supabase self-hosted é UMA, e mora aqui: o instalador a instala e
+# o update.sh leva quem já instalou até ela (atualizar_supabase_single_server).
+# Sem `readonly`: o update.sh relê este arquivo depois do checkout.
+SUPABASE_REF="self-hosted/v0.8.1"
+
+dir_do_supabase() { printf '%s/.runtime/supabase' "${PROJECT_DIR:-$PWD}"; }
+
+# O compose oficial declara `name: supabase` e `container_name` fixos
+# (supabase-db, supabase-envoy…). Dois Supabase na mesma VPS — o nosso e outro
+# qualquer, ou o de uma segunda árvore do CRM — brigariam pelos mesmos nomes. O
+# projeto leva o nome do projeto do CRM (o override tira os container_name), e
+# a identidade continua sendo a árvore: ver recusar_supabase_de_outra_arvore.
+projeto_do_supabase() { printf '%s-supabase' "$(nome_do_projeto_atual)"; }
+
+# `docker compose` do Supabase, com o ambiente LIMPO. O load_env exporta o .env
+# inteiro do CRM, e variável de ambiente vence o .env do projeto na
+# interpolação: sem o `env -i`, o SMTP_HOST/SMTP_PORT do CRM entrariam no lugar
+# dos do Supabase. O nome do projeto vai explícito pelo mesmo motivo.
+dc_supabase() {
+  (cd "$(dir_do_supabase)" && env -i PATH="$PATH" HOME="${HOME:-/root}" \
+    ${DOCKER_HOST:+DOCKER_HOST="$DOCKER_HOST"} \
+    ${DOCKER_CONTEXT:+DOCKER_CONTEXT="$DOCKER_CONTEXT"} \
+    ${DOCKER_CONFIG:+DOCKER_CONFIG="$DOCKER_CONFIG"} \
+    COMPOSE_PROJECT_NAME="$(projeto_do_supabase)" docker compose "$@")
+}
+
+# Invariante 8 (docs/doctrine/packaging.md) para o projeto do Supabase: o
+# mesmo guarda do CRM, perguntando pelos contêineres do Supabase e pela pasta
+# que os criou.
+recusar_supabase_de_outra_arvore() {  # recusar_supabase_de_outra_arvore [como reportar]
+  local projeto dir
+  projeto="$(projeto_do_supabase)"; dir="$(dir_do_supabase)"
+  COMPOSE_PROJECT_NAME="$projeto" PROJECT_DIR="$dir" COMPOSE=docker-compose.yml \
+    recusar_projeto_de_outra_arvore "$@"
+}
+
+# Valor para o .env do Supabase, que só o dotenv do Compose lê: aspas duplas
+# com `\`, `"` e `$` escapados (o Compose os desfaz; medido no install.sh, envq).
+valor_compose() { printf '"%s"' "$(printf '%s' "${1-}" | sed 's/[\\"$]/\\&/g')"; }
+
+# ── O GoTrue manda e-mail pelo SMTP do CRM ───────────────────────────────────
+#
+# O compose oficial aponta o GoTrue para `supabase-mail`, que não existe em
+# produção: "esqueci a senha" e a confirmação de cadastro não chegariam. O SMTP
+# do CRM (#1176) é a fonte, na MESMA precedência de lib/email/config.ts: a
+# linha da tela /admin/email, se existe; senão o .env. Sai 1 (e não toca em
+# nada) quando o CRM não tem SMTP — quem chama avisa o dono.
+sincronizar_smtp_do_gotrue() {
+  local env_sb sep=$'\x1f' linha="" host porta usuario senha remetente nome
+  env_sb="$(dir_do_supabase)/.env"
+  [ -f "$env_sb" ] || return 1
+  linha="$(psql_run -tA -F "$sep" -c "select coalesce(smtp_host,''), smtp_port,
+      coalesce(smtp_username,''),
+      coalesce(case when smtp_password_encrypted is null then '' else public.fn_decrypt_oauth(smtp_password_encrypted) end,''),
+      coalesce(from_email,''), coalesce(from_name,'')
+    from public.platform_smtp_settings where id = 1" 2>/dev/null)" || linha=""
+  if [ -n "$linha" ]; then
+    IFS="$sep" read -r host porta usuario senha remetente nome <<<"$linha"
+  else
+    host="${SMTP_HOST:-}"; porta="${SMTP_PORT:-587}"; usuario="${SMTP_USERNAME:-}"
+    senha="${SMTP_PASSWORD:-}"; remetente="${SMTP_FROM_EMAIL:-}"; nome="${SMTP_FROM_NAME:-}"
+  fi
+  [ -n "$host" ] && [ -n "$remetente" ] || return 1
+  set_env_var "$env_sb" SMTP_HOST "$(valor_compose "$host")"
+  set_env_var "$env_sb" SMTP_PORT "${porta:-587}"
+  set_env_var "$env_sb" SMTP_USER "$(valor_compose "$usuario")"
+  set_env_var "$env_sb" SMTP_PASS "$(valor_compose "$senha")"
+  set_env_var "$env_sb" SMTP_ADMIN_EMAIL "$(valor_compose "$remetente")"
+  set_env_var "$env_sb" SMTP_SENDER_NAME "$(valor_compose "${nome:-${APP_NAME:-DeskcommCRM}}")"
+}
+
+# ── O update.sh leva o Supabase até a versão pinada ──────────────────────────
+#
+# O `update.sh` oficial do Supabase faz o merge de três vias dos arquivos dele
+# contra a versão de partida (.supabase-version), nunca toca em dado nem no
+# .env (só acrescenta chave nova). Falhar aqui NÃO derruba a atualização do
+# CRM: o Supabase segue na versão de antes e a próxima rodada tenta de novo.
+atualizar_supabase_single_server() {
+  local dir atual
+  dir="$(dir_do_supabase)"
+  [ -f "$dir/.env" ] || { c_red "⛔ Modo single-server sem $dir/.env — rode install-single-server.sh."; return 1; }
+  cp "$KIT_DIR/supabase-single-server.override.yml" "$dir/docker-compose.deskcomm.yml" || return 1
+  set_env_var "$dir/.env" COMPOSE_PROJECT_NAME "$(projeto_do_supabase)"
+  atual="$(sed -n 's/^ref=//p' "$dir/.supabase-version" 2>/dev/null | tail -1)"
+  if [ "$atual" != "$SUPABASE_REF" ]; then
+    step "Atualizando o Supabase desta VPS (${atual:-desconhecida} → $SUPABASE_REF)"
+    if ! (cd "$dir" && env -i PATH="$PATH" HOME="${HOME:-/root}" sh update.sh --to "$SUPABASE_REF" --yes); then
+      c_ylw "⚠ O Supabase não foi atualizado; segue na versão ${atual:-anterior}. A próxima atualização tenta de novo."
+    fi
+  fi
+  dc_supabase up -d --wait
+}
+
+# Nome FÍSICO do volume que guarda as sessões do WAHA. `docker compose config
+# --volumes` devolve o nome LÓGICO (`waha-data`); passá-lo direto a `docker run
+# -v` cria/abre outro volume global com esse nome e produz um backup vazio que
+# parece válido. Perguntar ao contêiner pela montagem real mantém o prefixo do
+# projeto Compose (ex.: `deskcommcrm_waha-data`).
+#
+# A montagem também diz de QUE ESPÉCIE ela é, e `.Name` só responde por uma: num
+# bind de pasta do host (`- /srv/waha:/app/.sessions`) ele vem VAZIO, e ficar só
+# com ele devolve exatamente o volume fantasma que esta função existe para não
+# usar. Volume nomeado → `.Name`; bind → `.Source`.
+#
+# Sem contêiner não há montagem para ler, e o nome sai de
+# nome_do_projeto_atual, o mesmo que o compose usa: respeita COMPOSE_PROJECT_NAME
+# e mantém o `-` de uma pasta como `deskcomm-crm`.
+volume_waha_data() {
+  local container campos tipo nome origem
+  container="$(dc ps -a -q waha 2>/dev/null || true)"
+  campos=""
+  if [ -n "$container" ]; then
+    campos="$(docker inspect "$container" \
+      --format '{{range .Mounts}}{{if eq .Destination "/app/.sessions"}}{{.Type}}|{{.Name}}|{{.Source}}{{end}}{{end}}' \
+      2>/dev/null || true)"
+  fi
+  tipo="${campos%%|*}"
+  nome="${campos#*|}"; nome="${nome%%|*}"
+  origem="${campos##*|*|}"
+  case "$tipo" in
+    volume) if [ -n "$nome" ]; then printf '%s' "$nome"; return 0; fi ;;
+    bind)   if [ -n "$origem" ]; then printf '%s' "$origem"; return 0; fi ;;
+  esac
+  printf '%s' "$(nome_do_projeto_atual)_waha-data"
+}
+
+# O `.tgz` de um volume VAZIO tem ~87 bytes, uma entrada só (`.`) e o `tar` SAI
+# COM ZERO. Quem decide se o snapshot presta é o CONTEÚDO, não o código de saída
+# dele: contar as entradas além da raiz é o que separa um backup de verdade do
+# volume errado — a diferença que só aparecia no dia do restore.
+tar_tem_sessao() {  # tar_tem_sessao <arquivo.tgz>
+  local itens
+  itens="$(tar tzf "$1" 2>/dev/null | grep -cvxE '\./?$' || true)"
+  [ "${itens:-0}" -gt 0 ]
+}
+
+# ── QUEM FALA COM O BANCO E PODE SER PARADO ──────────────────────────────────
+#
+# O `update.sh` aplica o `baseline.sql`, que APAGA e RECRIA cada regra de
+# isolamento — é o único jeito portável, porque o Postgres não tem
+# `create or replace policy`. Com tráfego vivo isso vira disputa de trava, e
+# quando o CRIAR trava o APAGAR já valeu: a regra some, o banco passa a negar a
+# leitura em silêncio, e a tela fica VAZIA sem um erro sequer.
+#
+# Medido numa instalação real, no mesmo dia e com o mesmo arquivo:
+#   tudo de pé ................................ 113 travamentos
+#   CRM parado ................................  60 travamentos
+#   CRM + rest + realtime + studio parados ....   0 travamentos
+#
+# ⚠️ O realtime NÃO se chama `supabase-realtime`. Na instalação real o nome é
+# `realtime-dev.supabase-realtime`, e um padrão ancorado em `^supabase-` deixa
+# de pé justamente quem mais reage a mudança de estrutura. O ponto é escapado
+# porque em expressão regular ele casaria com qualquer caractere.
+#
+# ⚠️ O banco e o auth ficam DE PÉ de propósito: é no banco que o DDL roda, e
+# derrubar o auth deslogaria quem está na tela sem necessidade.
+#
+# ⚠️ Nada de varredura larga. Uma VPS hospeda outros sistemas (medido numa real:
+# um CRM imobiliário e dois WordPress). A lista é explícita, e é só a nossa.
+#
+# Vazio quando o Supabase é HOSPEDADO — lá não há o que parar, e é por isso que
+# a conferência das regras, que não depende de parar nada, é a peça portável.
+supabase_local_containers() {
+  # No single-server os nomes são os do projeto (sem container_name fixo): as
+  # mesmas três peças, achadas pelo projeto e pelo serviço — nunca as de outro
+  # Supabase que more na VPS.
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    docker ps --filter "label=com.docker.compose.project=$(projeto_do_supabase)" \
+      --format '{{.Names}} {{.Label "com.docker.compose.service"}}' 2>/dev/null \
+      | awk '$2 == "rest" || $2 == "studio" || $2 == "realtime" { print $1 }' || true
+    return 0
+  fi
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -E \
+    '^(supabase-rest|supabase-studio|realtime-dev\.supabase-realtime)$' || true
+}
+
+# ── O CICLO: PAUSAR ANTES DO BANCO, VOLTAR DEPOIS DE CONFERIR ────────────────
+#
+# Estas duas vivem aqui, e não dentro do `update.sh`, por um motivo prático: é
+# aqui que dá para carregá-las num teste e provar o ciclo com um `docker` dublê,
+# sem parar nada de verdade. O `update.sh` fica com o que é dele — a ordem dos
+# passos e o `trap`.
+#
+# `PARADOS` guarda o que esta rodada derrubou, para saber o que levantar.
+# `REGRAS_FALTANDO` é preenchida pela conferência e decide se o CRM volta.
+PARADOS="${PARADOS:-}"
+REGRAS_FALTANDO="${REGRAS_FALTANDO:-}"
+
+# ── A IMAGEM DAQUELA VERSÃO EXISTE MESMO? ────────────────────────────────────
+#
+# MEDIDO em 2026-09-13, e quem viu foi o dono da instalação: a tela ofereceu a
+# "Nova versão · 1.17.16" enquanto a imagem dela ainda estava sendo construída.
+# O agente decidia olhando SÓ a etiqueta no Git, e nunca perguntava se havia o
+# que baixar. Entre publicar a etiqueta e a imagem ficar pronta passam-se uns
+# seis minutos.
+#
+# Antes da pausa dos serviços isso era um susto: a atualização avisava "a versão
+# ainda está publicando, rode de novo em alguns minutos" e o sistema seguia no
+# ar com a versão antiga, porque nada tinha sido parado. Agora o app é PARADO
+# antes do banco e a volta usa o endereço da imagem NOVA — gravado antes de
+# tentar baixá-la. Sem imagem, ele não volta. O susto virou queda.
+#
+# ⚠️ SÓ A IMAGEM DO APP. O worker e o scheduler têm `build:` ao lado do `image:`
+# no compose, então o `up -d` os constrói localmente quando falta imagem — mais
+# lento, mesmo resultado. O app não tem essa rede de segurança, e essa
+# assimetria já está escrita no update.sh, onde as duas mensagens são
+# diferentes de propósito.
+#
+# Ecoa: publicada | ausente | indisponivel
+veredito_da_imagem_do_app() {  # veredito_da_imagem_do_app <versão alvo> <versão instalada>
+  local alvo="${1:-}" instalada="${2:-}"
+  [ -n "$alvo" ] || { printf 'indisponivel'; return 0; }
+  if docker buildx imagetools inspect "${IMG_APP}:${alvo}" >/dev/null 2>&1; then
+    printf 'publicada'; return 0
+  fi
+  # ⛔ A SONDA DE CONTROLE, e é ela que impede o conserto de virar defeito pior.
+  #
+  # Sem ela, uma VPS sem saída para o registro pararia de oferecer atualização
+  # PARA SEMPRE, em silêncio — e ninguém liga o silêncio de uma tela a um
+  # problema de rede. A versão INSTALADA é a sonda certa porque ela existe com
+  # certeza: está rodando aqui. Se nem ela responde, o que está fora é o
+  # registro, não a imagem.
+  #
+  # Instalação fora de release não tem versão instalada para sondar. Sem sonda
+  # não dá para separar as duas causas, e a resposta certa é a que não tira nada
+  # de ninguém: segue anunciando, como sempre foi.
+  [ -n "$instalada" ] || { printf 'indisponivel'; return 0; }
+  if docker buildx imagetools inspect "${IMG_APP}:${instalada}" >/dev/null 2>&1; then
+    printf 'ausente'
+  else
+    printf 'indisponivel'
+  fi
+}
+
+pausar_o_que_fala_com_o_banco() {
+  PARADOS="$(supabase_local_containers)"
+  c_ylw "Pausando o sistema para mexer no banco com segurança."
+  dc stop app worker scheduler >/dev/null 2>&1 || true
+  if [ -n "$PARADOS" ]; then
+    # shellcheck disable=SC2086
+    docker stop $PARADOS >/dev/null 2>&1 || true
+  fi
+}
+
+# ── O BANCO RELIGA ASSIM QUE O BANCO TERMINA ─────────────────────────────────
+#
+# MEDIDO na instalacao real em 2026-09-13: as pecas pararam as 03:10:18 e o
+# script so terminou as 03:13:09. QUASE TRES MINUTOS sem o Supabase — e nao
+# por falha: por desenho. A pausa acontecia na etapa do banco e a volta so no
+# gatilho de saida, depois de baixar imagem, recriar conteiner e esperar o
+# healthcheck do app.
+#
+# Esses tres minutos existiam mesmo quando tudo dava certo, e ninguem os tinha
+# medido porque o alvo era outro. Religar aqui e o caminho; o gatilho de saida
+# continua existindo, mas como rede de seguranca.
+#
+# IDEMPOTENTE de proposito: o gatilho vai chamar de novo, e uma segunda
+# chamada que reclamasse faria TODA atualizacao bem-sucedida terminar com um
+# alarme falso.
+religar_o_supabase() {
+  if [ -n "${PARADOS:-}" ]; then
+    # ── A VOLTA DEIXA DE SER MUDA ────────────────────────────────────────────
+    #
+    # MEDIDO em 2026-09-13, numa atualização real: a pausa funcionou, a
+    # conferência rodou com tudo parado (92 de 92) e as três peças do Supabase
+    # NÃO VOLTARAM. Ficaram paradas até alguém perceber — e a atualização já
+    # tinha dito "concluída com sucesso".
+    #
+    # A causa daquela falha NÃO FOI DETERMINADA, e isso fica escrito como está:
+    # a cadeia inteira, reproduzida na mesma VPS com dublês, funciona; e a
+    # evidência se perdeu ao subir as peças, que era o certo a fazer com o
+    # sistema fora do ar. O que não pode se repetir é o SILÊNCIO — a versão
+    # anterior desta linha era `docker start ... >/dev/null 2>&1 || true`, que
+    # não deixa rastro nenhum quando falha.
+    local ainda_fora="" c
+    # shellcheck disable=SC2086
+    docker start $PARADOS >/dev/null 2>&1 || true
+    for c in $PARADOS; do
+      docker ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$c" || ainda_fora="${ainda_fora}${ainda_fora:+ }${c}"
+    done
+    if [ -n "$ainda_fora" ]; then
+      # Uma segunda tentativa antes de gritar: subir contêiner logo depois de
+      # uma enxurrada de operações do Docker às vezes precisa de um instante.
+      # shellcheck disable=SC2086
+      docker start $ainda_fora >/dev/null 2>&1 || true
+      sleep 3
+      local resta="" d
+      for d in $ainda_fora; do
+        docker ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$d" || resta="${resta}${resta:+ }${d}"
+      done
+      ainda_fora="$resta"
+    fi
+    if [ -n "$ainda_fora" ]; then
+      c_red "⛔ PEÇAS DO BANCO NÃO VOLTARAM depois da atualização:"
+      for c in $ainda_fora; do c_red "   • $c"; done
+      c_red "   Enquanto elas estiverem paradas, o CRM não consegue ler nem gravar."
+      c_ylw "   Para subir à mão:  docker start $ainda_fora"
+    fi
+    PARADOS=""
+  fi
+}
+
+restaurar_servicos() {
+  religar_o_supabase
+  # ⛔ O CRM NÃO VOLTA AO AR COM REGRA DE ISOLAMENTO FALTANDO.
+  #
+  # Um CRM fora do ar é um problema visível que alguém resolve em minutos. Um
+  # CRM no ar sem regra de isolamento mostra tela VAZIA para todo mundo, sem um
+  # erro sequer, e é indistinguível de "não há nada aqui" — foi exatamente isso
+  # que custou um dia inteiro nesta instalação, com o funil vazio e a
+  # atualização dizendo "concluída com sucesso".
+  if [ -n "${REGRAS_FALTANDO:-}" ]; then
+    c_red "   O CRM segue PARADO de propósito. Resolva as regras antes de subir."
+    # ⚠️ O aviso de manutenção NÃO desce aqui, de propósito. Com regra faltando o
+    # CRM não volta, e a página é a única coisa que explica isso a quem tentar
+    # abrir o sistema — melhor que um erro de conexão sem autor.
+    return 0
+  fi
+  # O aviso desce ANTES de o CRM subir, e não depois. Com o Caddy do próprio kit
+  # a página atende pelo apelido `app` na rede interna; com os dois de pé ao
+  # mesmo tempo o Docker faria rodízio, e metade das pessoas veria "estamos
+  # atualizando" com o CRM já no ar. A janela que isso abre dura o `docker rm`, e
+  # nela aparece o mesmo erro que aparecia o tempo todo antes desta página.
+  #
+  # `declare -F` porque quem carrega o aviso é só o update.sh: install.sh e
+  # agent.sh também sourceiam este arquivo e não têm o que derrubar.
+  declare -F manutencao_desce >/dev/null 2>&1 && manutencao_desce
+  dc up -d app worker scheduler >/dev/null 2>&1 || true
 }
 
 # ── Imagem pronta que não serve para esta VPS: constrói a versão aqui ────────
@@ -523,7 +874,7 @@ url_do_schema() {
 # psql efêmero via container (não exige psql no host). Usa a conexão de schema:
 # os chamadores mexem em `auth.mfa_factors` e `private.app_secrets`, fora do
 # alcance de uma role de app com grants só em `public`.
-psql_run() { docker run --rm -i postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 "$@"; }
+psql_run() { pg_container -i postgres:17-alpine psql "$(url_do_schema)" -v ON_ERROR_STOP=1 "$@"; }
 
 # ── Re-aplicar o baseline num banco que JÁ existe ────────────────────────────
 # Chamado pelo `update.sh` e pelo `install.sh` re-executado. Sem `ON_ERROR_STOP`,
@@ -592,7 +943,7 @@ reaplicar_baseline() {
   [ -z "$log" ] || : > "$log"
   while :; do
     rc=0
-    raw="$(docker run --rm -i -v "$arquivo:/b.sql:ro" postgres:17-alpine \
+    raw="$(pg_container -i -v "$arquivo:/b.sql:ro" postgres:17-alpine \
           psql "$(url_do_schema)" -q -f /b.sql 2>&1)" || rc=$?
     [ -z "$log" ] || printf '── passada %s de %s (saída %s) ──\n%s\n' "$BASELINE_PASSADAS" "$tentativas" "$rc" "$raw" >> "$log"
     BASELINE_INESPERADO="$(printf '%s\n' "$raw" | grep -iE 'ERROR|FATAL' | grep -viE "$BASELINE_ERROS_BENIGNOS" || true)"
@@ -696,6 +1047,9 @@ IMG_NS="ghcr.io/pcluke24-sys"
 IMG_APP="${IMG_NS}/deskcommcrm"
 IMG_WORKER="${IMG_NS}/deskcomm-worker"
 IMG_SCHEDULER="${IMG_NS}/deskcomm-scheduler"
+# Telefonia por SIP (#677): só roda com `telefonia` em COMPOSE_PROFILES, mas é
+# imagem NOSSA e segue a mesma versão das outras três (gravar_imagens).
+IMG_VOICE_AGENT="${IMG_NS}/deskcomm-voice-agent"
 
 # A última versão publicada (ex.: "1.2.1"), ou vazio se não deu para saber.
 #
@@ -762,9 +1116,13 @@ ghcr_status() {
 # impossíveis, e o kit as construiria na VPS **em silêncio**, do topo da main:
 # app de uma release + worker/scheduler de outro código. Exatamente a mistura de
 # versões que a doutrina existe para proibir, no caminho de primeira impressão.
+# O nome ficou de quando eram três; hoje são quatro, e a lista acompanha a
+# matriz de publish-image.yml — quem cobra é
+# tests/unit/listas-de-imagens-seguem-matriz.test.ts. Renomear a função
+# quebraria o leitor daquele teste sem ganhar nada: o que importa é a lista.
 trio_publicado() {
   local tag="$1" i
-  for i in deskcommcrm deskcomm-worker deskcomm-scheduler; do
+  for i in deskcommcrm deskcomm-worker deskcomm-scheduler deskcomm-voice-agent; do
     [ "$(ghcr_status "$i" "$tag")" = "200" ] || return 1
   done
   return 0
@@ -889,6 +1247,12 @@ gravar_imagens() {
   set_env_var "$envfile" WORKER_PULL_POLICY    "$politica"
   set_env_var "$envfile" SCHEDULER_IMAGE       "${IMG_SCHEDULER}:${versao}"
   set_env_var "$envfile" SCHEDULER_PULL_POLICY "$politica"
+  # A quarta imagem só é puxada com o profile `telefonia` ligado — compose não
+  # puxa serviço de profile inativo. Gravá-la sempre é o que garante que, no
+  # dia em que o dono ligar a telefonia, ela suba na MESMA versão do resto, e
+  # não no `stable` móvel do default do compose.
+  set_env_var "$envfile" VOICE_AGENT_IMAGE       "${IMG_VOICE_AGENT}:${versao}"
+  set_env_var "$envfile" VOICE_AGENT_PULL_POLICY "$politica"
 }
 
 # ── Os segredos da chamada de voz, no .env de quem já tinha instalado ────────

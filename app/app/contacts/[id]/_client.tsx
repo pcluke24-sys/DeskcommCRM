@@ -8,10 +8,12 @@ import { format } from "date-fns";
 import { ShieldCheck, PencilSimple } from "@/lib/ui/icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
+import { ChipDeEtiqueta } from "@/components/tags/ChipDeEtiqueta";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useContact } from "@/hooks/contacts/useContact";
+import { useHierarquiaDoAnuncio } from "@/hooks/contacts/useHierarquiaDoAnuncio";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useDefaultPipeline } from "@/hooks/pipelines/useDefaultPipeline";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
@@ -60,6 +62,23 @@ export function ContactDetailClient({ contactId }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [anonOpen, setAnonOpen] = useState(false);
 
+  /*
+    Pede o nome da campanha SÓ quando há um anúncio e ainda não há nome.
+
+    Quem chegou pelo site já trouxe os nomes na URL, e quem já foi resolvido uma
+    vez tem `campaign_name` no metadata — nos dois casos, perguntar à plataforma
+    gastaria cota para receber o que já está na tela. Cota é o recurso escasso
+    desta conta, não latência.
+
+    Derivado de `q.data` e não de `contact` porque hook não pode ficar depois de
+    um `return` condicional — e os dois `if` de carregamento vêm logo abaixo.
+  */
+  const metadataDoContato = (q.data?.data.source_metadata ?? {}) as Record<string, unknown>;
+  const temAnuncio =
+    typeof metadataDoContato.ad_id === "string" && metadataDoContato.ad_id.trim() !== "";
+  const jaTemNome = typeof metadataDoContato.campaign_name === "string";
+  const hierarquia = useHierarquiaDoAnuncio(contactId, temAnuncio && !jaTemNome);
+
   if (q.isLoading) {
     return (
       <div className="space-y-4 p-6">
@@ -88,7 +107,17 @@ export function ContactDetailClient({ contactId }: Props) {
 
   // Os quatro níveis que quem opera tráfego lê. O jsonb já os recebia dos dois
   // caminhos de entrada — site e clique-para-WhatsApp — e nenhuma tela o abria.
-  const origem = origemDoContato(contact.source_metadata, contact.source);
+  //
+  // O que a plataforma respondeu entra COMO SE fosse metadata, e não como um
+  // segundo caminho na tela: as três chaves resolvidas (`campaign_name`,
+  // `adset_name`, `ad_name`) são exatamente as que `origemDoContato` já lê, no
+  // degrau abaixo da UTM. Uma regra de precedência só, e ela já estava escrita.
+  const origem = origemDoContato(
+    hierarquia.data
+      ? { ...(contact.source_metadata ?? {}), ...hierarquia.data }
+      : contact.source_metadata,
+    contact.source,
+  );
 
   return (
     <div className="space-y-4 p-6">
@@ -120,9 +149,7 @@ export function ContactDetailClient({ contactId }: Props) {
           </div>
           <div className="mt-2 flex flex-wrap gap-1">
             {contact.tags.map((t) => (
-              <Badge key={t} variant="neutral">
-                {t}
-              </Badge>
+              <ChipDeEtiqueta key={t} tag={t} />
             ))}
             {contact.is_blocked && <Badge variant="warning">{t("Bloqueado")}</Badge>}
             {contact.is_anonymized && <Badge variant="destructive">{t("Anonimizado")}</Badge>}
@@ -246,9 +273,7 @@ export function ContactDetailClient({ contactId }: Props) {
                   {contact.tags.length === 0
                     ? "—"
                     : contact.tags.map((t) => (
-                        <Badge key={t} variant="neutral">
-                          {t}
-                        </Badge>
+                        <ChipDeEtiqueta key={t} tag={t} />
                       ))}
                 </dd>
               </div>

@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/auth/AuthProvider";
 import {
   forwardRef,
   useImperativeHandle,
+  useEffect,
   useRef,
   useState,
   type ClipboardEvent,
@@ -33,6 +34,10 @@ export interface ComposerHandle {
 
 interface Props {
   conversationId: string;
+  initialDraft?: string;
+  initialMode?: "reply" | "note";
+  onDraftChange?: (text: string, mode: "reply" | "note") => void;
+  active?: boolean;
   disabled?: boolean;
   /** Set true when contact is blocked / anonymized — explanation shown. */
   blockedReason?: string | null;
@@ -64,6 +69,10 @@ interface Props {
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   {
     conversationId,
+    initialDraft = "",
+    initialMode = "reply",
+    active = true,
+    onDraftChange,
     disabled,
     blockedReason,
     janelaFechada,
@@ -76,11 +85,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 ) {
   const t = useT();
   const { activeOrg } = useAuth();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialDraft);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);
-  const [mode, setMode] = useState<"reply" | "note">("reply");
+  const [mode, setMode] = useState<"reply" | "note">(initialMode);
+  useEffect(() => {
+    onDraftChange?.(text, mode);
+  }, [text, mode, onDraftChange]);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const send = useSendMessage();
   const upload = useUploadMedia();
@@ -349,7 +361,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               <PaperPlaneTilt size={16} weight="fill" aria-hidden />
             </Button>
           ) : (
-            <AudioRecorder conversationId={conversationId} disabled={respostaBarrada} />
+            active && <AudioRecorder conversationId={conversationId} disabled={respostaBarrada} />
           )}
         </div>
       </div>

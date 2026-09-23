@@ -45,6 +45,7 @@ export function SidebarContent({
     user.is_platform_admin && !user.support,
     activeOrg?.role ?? null,
     activeOrg?.interface_settings,
+    activeOrg?.modulos_ligados ?? [],
     activeOrg?.ai_module_enabled !== false,
   );
   // Configurações sai da área que rola e vai para o rodapé fixo: medido em

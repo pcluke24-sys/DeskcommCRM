@@ -74,6 +74,12 @@ const schema = z.object({
   INTERNAL_SECRET: required("INTERNAL_SECRET"),
   /** Optional dedicated secret for cron endpoints (S-06.07 onwards). */
   INTERNAL_CRON_SECRET: z.string().optional().default(""),
+  /**
+   * Segredo do DONO DA INSTALAÇÃO para `POST /api/v1/tenants/provision` (um
+   * sistema externo cria organizações). Vazio por padrão = a rota não existe
+   * (404); com menos de 32 caracteres também fica desligada.
+   */
+  TENANT_PROVISIONING_SECRET: z.string().optional().default(""),
 
   // Laboratório local de extensões: origem HTTP exata em 127.0.0.1. O cliente
   // recusa a exceção se a URL do app não for loopback. Vazio mantém HTTPS público.
@@ -169,6 +175,13 @@ const schema = z.object({
   // server-to-server não tem cookie. URL sem token dá um cliente que constrói e
   // devolve 401 em toda chamada — por isso `getWacallsClient()` exige os dois.
   WACALLS_API_TOKEN: z.string().optional().default(""),
+
+  // ─── Canal Datafy (recorte do #1130) — OPCIONAL, DESLIGADO POR PADRÃO ───
+  //
+  // Só `true` liga (decisão do dono, doc 54). Vazio = a instalação não oferece o
+  // canal: sem aba em Conexões, rota de conexão 404, webhook recusado. Quem lê
+  // é `canalGraphParceiroLigado()` em `lib/channels/graph-parceiro/credentials.ts`.
+  DATAFY_ENABLED: z.string().optional().default(""),
 
   // Upstash Redis
   UPSTASH_REDIS_REST_URL: required("UPSTASH_REDIS_REST_URL"),
@@ -441,8 +454,9 @@ const schema = z.object({
   APP_ACCENT_HEX: z.string().optional().default(""),
 
   /**
-   * Com o que a instalação NASCE quanto a cadastro: `aberto` (padrão) ou
-   * `so_convite`. Vazio = `aberto`, que é como o produto sempre funcionou.
+   * Com o que a instalação NASCE quanto a cadastro: `aberto` (padrão),
+   * `com_aprovacao` ou `so_convite`. Vazio = `aberto`, que é como o produto
+   * sempre funcionou.
    *
    * O BANCO ESTÁ ACIMA DISTO. Havendo linha em `platform_settings` — o que
    * acontece assim que alguém usa a tela em `/admin/cadastro` —, é ela que

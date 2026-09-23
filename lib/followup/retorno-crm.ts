@@ -88,7 +88,38 @@ export function criaRetornoDbSupabase(admin: SupabaseClient): RetornoDb {
         .limit(1);
       if (error) throw new Error(`retorno_vivo_query_failed: ${error.message}`);
       const row = (data ?? [])[0] as LinhaDeCron | undefined;
-      return row ? paraRetorno(row) : null;
+      if (row) return paraRetorno(row);
+
+      // O cron one-shot é desabilitado assim que vira um job. Se o envio ficar
+      // represado por janela/cap do número, esse job continua sendo um retorno
+      // vivo. Ignorá-lo permite à IA criar outro nesse intervalo e ambos saem
+      // juntos quando o canal reabre (incidente confirmado em produção).
+      const pendente = await admin
+        .from("job_queue")
+        .select("id, contact_id, run_after, payload")
+        .eq("organization_id", orgId)
+        .eq("contact_id", contactId)
+        .eq("kind", "followup_turn")
+        .in("status", ["pending", "running"])
+        .order("run_after", { ascending: true })
+        .limit(1);
+      if (pendente.error) {
+        throw new Error(`retorno_pendente_query_failed: ${pendente.error.message}`);
+      }
+      const job = (pendente.data ?? [])[0] as
+        | { id: string; contact_id: string; run_after: string; payload: Record<string, unknown> | null }
+        | undefined;
+      return job
+        ? paraRetorno({
+            id: job.id,
+            contact_id: job.contact_id,
+            next_run_at: job.run_after,
+            enabled: true,
+            payload: job.payload,
+            cancelled_at: null,
+            cancel_reason: null,
+          })
+        : null;
     },
 
     async insere(orgId, input) {

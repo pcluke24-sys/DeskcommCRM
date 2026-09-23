@@ -20,11 +20,11 @@ describe("módulo comercial por organização", () => {
   });
   it("esconde IA sem remover outros hubs nem afetar outra organização", () => {
     const enabled = sidebarGroups(false, "admin");
-    const disabled = sidebarGroups(false, "admin", undefined, false);
+    const disabled = sidebarGroups(false, "admin", undefined, undefined, false);
     expect(disabled.map((g) => g.group.id)).toEqual(
       enabled.filter((g) => g.group.id !== "ia").map((g) => g.group.id),
     );
-    expect(searchable(false, "admin", undefined, false).some((d) => d.group === "ia")).toBe(false);
+    expect(searchable(false, "admin", undefined, undefined, false).some((d) => d.group === "ia")).toBe(false);
     expect(searchable(false, "admin").some((d) => d.group === "ia")).toBe(true);
   });
 });
