@@ -173,6 +173,25 @@ describe("agendar o retorno — o próximo passo existe e é visível", () => {
 });
 
 describe("cancelar o retorno — o humano decide e o agente descobre", () => {
+  beforeAll(async () => {
+    // O cenário anterior prova o anti-empilhamento deixando, de propósito, o
+    // cron desabilitado e uma entrega pendente na fila. Cancelamento mede outra
+    // transição: um retorno que AINDA está agendado. Reconstruir essa
+    // pré-condição aqui impede que a ordem dos cenários decida o veredito.
+    await pool.query(
+      `delete from job_queue
+        where organization_id = $1 and contact_id = $2 and kind = 'followup_turn'`,
+      [ORG_A, CONTATO],
+    );
+    await pool.query(
+      `update cron_jobs
+          set enabled = true, cancelled_at = null, cancel_reason = null
+        where organization_id = $1 and contact_id = $2
+          and kind = 'at' and job_kind = 'followup_turn'`,
+      [ORG_A, CONTATO],
+    );
+  });
+
   it("marca cancelled_at, e a situação deixa de ser confundível com disparado", async () => {
     const db = criaRetornoDbPg(pool);
     const vivo = await db.buscaRetornoVivo(ORG_A, CONTATO);

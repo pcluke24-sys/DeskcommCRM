@@ -19,7 +19,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { ok, fail } from "@/lib/api/wrappers";
+import { ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import {

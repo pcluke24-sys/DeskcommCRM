@@ -568,7 +568,7 @@ for (const role of ["admin", "manager", "agent", "viewer"] as const) {
       await page.goto("/login");
       await page.locator("#email").fill(email);
       await page.locator("#password").fill(base.password);
-      await page.getByRole("button", {name:/entrar/i}).click();
+      await page.getByRole("button", { name: "Entrar", exact: true }).click();
       const setup = role === "admin" || role === "manager";
       await page.waitForURL(setup ? /\/onboarding\// : /\/app\//, {timeout:60_000});
       if (!setup) {
