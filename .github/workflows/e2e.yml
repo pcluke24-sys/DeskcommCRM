@@ -1349,7 +1349,20 @@ jobs:
         run: |
           mv supabase/migrations /tmp/migrations-off
           mkdir -p supabase/migrations
-          supabase start
+          iniciou=false
+          for tentativa in 1 2 3 4 5; do
+            if supabase start; then
+              iniciou=true
+              break
+            fi
+            echo "::warning::download do stack Supabase falhou na tentativa ${tentativa}/5; preservando imagens já baixadas e tentando novamente"
+            supabase stop --no-backup || true
+            sleep $((tentativa * 15))
+          done
+          if [ "$iniciou" != "true" ]; then
+            echo "::error::Supabase não iniciou após 5 tentativas"
+            exit 1
+          fi
 
       # O baseline é um dump `--schema-only`: ele USA os tipos das extensões
       # (public.vector, citext, gin_trgm_ops) mas não as cria. O stack local do
