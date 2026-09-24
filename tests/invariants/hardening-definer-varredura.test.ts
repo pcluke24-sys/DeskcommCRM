@@ -67,6 +67,15 @@ const ANON_PERMITIDO: readonly Excecao[] = [];
  */
 const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
   {
+    fn: "fn_delete_contact_atomic(uuid,uuid)",
+    razao:
+      "DELETE app/api/v1/contacts/[id]/route.ts usa createClient da sessão e chama " +
+      "por app/api/v1/contacts/_handler.ts. A função exige membro agent+ da organização " +
+      "antes de qualquer escrita, filtra todas as tabelas por organization_id e reúne " +
+      "mensagens, conversa, ficha e cascatas numa só transação; " +
+      "tests/invariants/contato-delete-followup.test.ts prova a trava do job, viewer e rollback.",
+  },
+  {
     fn: "fn_finalizar_comanda(uuid,uuid,uuid,integer)",
     razao:
       "POST app/api/v1/financeiro/comandas/[id]/finalizar/route.ts e " +

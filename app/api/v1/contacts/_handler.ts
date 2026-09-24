@@ -801,37 +801,18 @@ export async function deleteContactHandler(
     );
   }
 
-  // `apagados` é preenchido passo a passo de propósito: se um DELETE do meio
-  // falhar, a linha de auditoria do erro precisa dizer exatamente até onde o
-  // histórico foi, senão o incidente vira arqueologia.
-  const apagados: string[] = [];
-  let deleted: { id: string } | null = null;
+  // Uma unica RPC = uma unica transacao. Antes, cada DELETE abaixo era uma
+  // requisicao PostgREST independente: se a ficha falhasse (por exemplo, o
+  // gatilho protegido de um job de follow-up em CASCADE), mensagens e
+  // conversas ja tinham sido confirmadas e nao voltavam. A funcao do banco
+  // valida o mesmo papel agent+, filtra a organizacao e so abre a protecao da
+  // fila dentro desta transacao de exclusao.
+  let deleted: string | null = null;
   try {
-    // Mensagens e conversas RESTRICT no contato: apagar primeiro, senão o
-    // DELETE da ficha falha para qualquer lead que já falou no canal.
-    const { error: msgErr } = await supabase
-      .from("messages")
-      .delete()
-      .eq("contact_id", contactId)
-      .eq("organization_id", ctx.organization_id);
-    throwOnDbError(msgErr, ctx.requestId, ctx.idioma);
-    apagados.push("messages");
-
-    const { error: convErr } = await supabase
-      .from("conversations")
-      .delete()
-      .eq("contact_id", contactId)
-      .eq("organization_id", ctx.organization_id);
-    throwOnDbError(convErr, ctx.requestId, ctx.idioma);
-    apagados.push("conversations");
-
-    const { data, error: delErr } = await supabase
-      .from("contacts")
-      .delete()
-      .eq("id", contactId)
-      .eq("organization_id", ctx.organization_id)
-      .select("id")
-      .maybeSingle();
+    const { data, error: delErr } = await supabase.rpc("fn_delete_contact_atomic", {
+      p_organization_id: ctx.organization_id,
+      p_contact_id: contactId,
+    });
     throwOnDbError(delErr, ctx.requestId, ctx.idioma);
     deleted = data;
   } catch (err) {
@@ -844,7 +825,7 @@ export async function deleteContactHandler(
       resourceType: "contact",
       resourceId: contactId,
       requestId: ctx.requestId,
-      metadata: { ...a.metadataActor, motivo: "falha_ao_apagar", vinculos: [], apagados },
+      metadata: { ...a.metadataActor, motivo: "falha_ao_apagar", vinculos: [], apagados: [] },
     });
     throw err;
   }
@@ -882,5 +863,5 @@ export async function deleteContactHandler(
     metadata: a.metadataActor,
   });
 
-  return { id: deleted.id as string };
+  return { id: deleted };
 }
