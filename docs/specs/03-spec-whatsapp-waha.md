@@ -1682,7 +1682,7 @@ Pra distinguir múltiplos celulares vinculados, fora do escopo MVP (WAHA não ex
 
 ## 10. Crons
 
-A cadência vigente não mora neste documento: ela vive em duas fontes espelhadas — `docker/scheduler/entrypoint.sh` (o serviço `scheduler` do compose, que é o caminho self-host) e `vercel.ts` na raiz (para quem hospeda a própria instalação na Vercel). `tests/unit/cron-routes-scheduled.test.ts` confere as duas uma contra a outra e contra o diretório `app/api/v1/cron/`, e reprova divergência. Para ver a lista de hoje:
+A cadência vigente não mora neste documento: ela vive em `docker/scheduler/entrypoint.sh` — o crontab do serviço `scheduler` do compose, que é quem bate as rotas no self-host e é a única lista de agendamento sob gate. `tests/unit/cron-routes-scheduled.test.ts` confere essa lista contra o diretório `app/api/v1/cron/` nas duas direções: reprova rota de cron sem agendamento e agendamento apontando para rota que não existe. Para ver a lista de hoje:
 
 ```bash
 grep -oE 'api/v1/cron/[a-z0-9-]+' docker/scheduler/entrypoint.sh | sort -u
@@ -2048,3 +2048,21 @@ select indexname from pg_indexes where schemaname = 'public'
 ## Confirmação
 
 Spec 03 escrita em `/Users/rafaelmelgaco/DeskcommCRM/docs/specs/03-spec-whatsapp-waha.md`. Contém: schema SQL completo das 5 tabelas (channel_sessions + warmup, conversations, messages, webhook_events_log) com RLS e indexes; wrapper TypeScript do WAHA com classes de erro; handlers completos de criação de sessão, webhook receiver com HMAC-SHA512 timing-safe, send pipeline com optimistic UI e pg_boss; rate limiter Redis (1msg/1.2s + jitter), spinning de copy DSL, daily limit, janela horária, detector STOP, warm-up; 3 crons; 7 edge cases tratados; hospedagem Railway → Hostgator; 14 testes de integração mapeados; 9 migrations ordenadas. Todas as regras W-01 a W-12, T-07 e AT-07 estão materializadas em código. Pronto pra crítica e Epics.
+
+## Conexão por código de pareamento (extensão da sessão existente)
+
+CONFIRMADO no código: `PairingOptions` é compartilhado por Conexões e onboarding.
+`POST /api/v1/channel-sessions/{id}/pairing-code` recebe `{phone_number}` e exige
+admin, prova MFA quando aplicável e suporte com permissão de escrita. O canal é
+resolvido por ID + organização autenticada. Arquivados e canais sem sessão são
+recusados. A camada `lib/channels/pairing-code.ts` consulta o estado remoto e só
+chama `POST /api/{session}/auth/request-code` em `SCAN_QR_CODE`; nunca faz logout
+ou restart. Usa credencial de servidor, timeout, validação da resposta e no-store.
+
+Proteção escolhida: uma tentativa por canal em janela de 30 segundos, com o
+contador Redis existente (fallback por processo). Telefone e código não são
+gravados nem incluídos na auditoria. `channel.pairing_code_requested` aparece
+na auditoria administrativa. O polling já existente confirma `WORKING`; erro
+oferece nova tentativa ou QR. Pareamento real exige a confirmação no celular.
+
+Fonte do contrato: https://waha.devlike.pro/docs/how-to/sessions/#get-pairing-code

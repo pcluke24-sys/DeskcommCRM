@@ -62,10 +62,20 @@ export function criaRetornoDbPg(db: pg.Pool): RetornoDb {
   return {
     async buscaRetornoVivo(orgId, contactId) {
       const { rows } = await db.query<LinhaDeCron>(
-        `select ${COLUNAS}, (payload->>'promised_at') as promised_at
-           from cron_jobs
-          where organization_id = $1 and contact_id = $2
-            and kind = 'at' and job_kind = 'followup_turn' and enabled = true
+        `select id, contact_id, next_run_at, enabled, payload, cancelled_at, cancel_reason,
+                (payload->>'promised_at') as promised_at
+           from (
+             select id, contact_id, next_run_at, enabled, payload, cancelled_at, cancel_reason
+               from cron_jobs
+              where organization_id = $1 and contact_id = $2
+                and kind = 'at' and job_kind = 'followup_turn' and enabled = true
+             union all
+             select id, contact_id, run_after as next_run_at, true as enabled, payload,
+                    null::timestamptz as cancelled_at, null::text as cancel_reason
+               from job_queue
+              where organization_id = $1 and contact_id = $2
+                and kind = 'followup_turn' and status in ('pending', 'running')
+           ) retorno_vivo
           order by next_run_at asc
           limit 1`,
         [orgId, contactId],

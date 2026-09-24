@@ -26,8 +26,9 @@ import {
   normalizarModoDeOrcamento,
   type ChaveDeOrcamento,
   type ModoDeOrcamento,
-} from "./orcamento";
-import type { CacheTtl } from "./stable-prefix";
+} from './orcamento';
+import type { RaciocinioDeepseek } from './providers';
+import type { CacheTtl } from './stable-prefix';
 
 /** Config da camada LLM montada do env validado (padrão crmEdgeConfigFromEnv). */
 export interface LlmEdgeConfig {
@@ -55,6 +56,12 @@ export interface LlmEdgeConfig {
    * monta a config na mão (testes) — o seam aplica a doutrina '1h' quando ausente.
    */
   cacheTtl?: CacheTtl;
+  /**
+   * Toggle do raciocínio (thinking) da DeepSeek — knob DEEPSEEK_THINKING.
+   * Ausente = `'provider'`: o provedor decide (raciocínio LIGADO). Só a
+   * DeepSeek lê este valor; os outros provedores não passam por essa fábrica.
+   */
+  deepseekThinking?: RaciocinioDeepseek;
   /**
    * `AI_BUDGET_ENFORCEMENT` já normalizado — o kill switch do operador da
    * instalação. Ausente = `'on'`, e `'on'` NÃO LIGA NADA: significa apenas
@@ -86,16 +93,22 @@ export function llmEdgeConfigFromEnv(env: {
   OPENROUTER_API_KEY?: string;
   LLM_CACHE_TTL?: string;
   AI_BUDGET_ENFORCEMENT?: string;
+  DEEPSEEK_THINKING?: string;
 }): LlmEdgeConfig {
   const ttl = env.LLM_CACHE_TTL ?? "1h";
   if (ttl !== "5m" && ttl !== "1h") {
     throw new Error("LLM_CACHE_TTL inválido — use '5m' ou '1h' (default 1h)");
+  }
+  const raciocinio = env.DEEPSEEK_THINKING ?? 'provider';
+  if (raciocinio !== 'provider' && raciocinio !== 'disabled') {
+    throw new Error("DEEPSEEK_THINKING inválido — use 'provider' ou 'disabled' (default provider)");
   }
   return {
     ...(env.ANTHROPIC_API_KEY ? { anthropicApiKey: env.ANTHROPIC_API_KEY } : {}),
     ...(env.OPENAI_API_KEY ? { openaiApiKey: env.OPENAI_API_KEY } : {}),
     ...(env.OPENROUTER_API_KEY ? { openrouterApiKey: env.OPENROUTER_API_KEY } : {}),
     cacheTtl: ttl,
+    deepseekThinking: raciocinio,
     // Sem `if` de valor vazio, ao contrário das chaves acima: aqui o ausente
     // TEM um significado ('on'), e o normalizador é quem o dá. Um campo
     // opcional que some faria o seam ter de repetir o default, e dois defaults
@@ -133,10 +146,28 @@ export interface OrcamentoDaOrg {
   limiarPct: number;
 }
 
+/**
+ * De QUEM é a chave que o resolvedor devolveu. Mesmo vocabulário de
+ * `lib/ai/embeddings/chave.ts`, que responde a mesma pergunta para embedding.
+ */
+export type OrigemDaChaveLlm = 'credencial_da_organizacao' | 'chave_da_instalacao';
+
 export interface OrgLlmConfig {
   provider: string;
   /** plaintext decifrado — existe só em memória, jamais logado/persistido */
   apiKey: string;
+  /**
+   * `chave_da_instalacao` = a organização não tinha credencial ativa e validada
+   * para o provedor (ou a escolhida foi revogada) e a escada caiu no `.env` —
+   * a chave que paga a conta de TODAS as empresas desta instalação.
+   *
+   * Existe para quem decide PARA ONDE a chave pode ir. O endereço de um ponto
+   * (`ai_purpose_bindings.base_url`) é escolhido por quem administra a
+   * organização; a chave da instalação não pode acompanhá-lo (decisão 22-a do
+   * dono do produto). Antes deste campo, o único jeito de saber era comparar o
+   * plaintext com as chaves do `.env`, e cada caminho fazia a sua comparação.
+   */
+  origemDaChave: OrigemDaChaveLlm;
   defaultModel: string | null;
   params: Record<string, unknown>;
   enabledModels: string[];
@@ -326,6 +357,9 @@ export async function resolveOrgLlmConfig(
       );
 
   let apiKey: string;
+  // Atribuída junto com a chave, em cada degrau: a origem é um fato de QUAL
+  // ramo escolheu a chave, e só este ponto sabe isso sem adivinhar.
+  let origemDaChave: OrigemDaChaveLlm;
   const cred = credRows[0];
   if (cred !== undefined) {
     apiKey = decryptKey({
@@ -333,12 +367,16 @@ export async function resolveOrgLlmConfig(
       iv: byteaToBuffer(cred.api_key_iv),
       tag: byteaToBuffer(cred.api_key_tag),
     });
-  } else if (provider === "anthropic" && cfg.anthropicApiKey) {
+    origemDaChave = 'credencial_da_organizacao';
+  } else if (provider === 'anthropic' && cfg.anthropicApiKey) {
     apiKey = cfg.anthropicApiKey;
-  } else if (provider === "openai" && cfg.openaiApiKey) {
+    origemDaChave = 'chave_da_instalacao';
+  } else if (provider === 'openai' && cfg.openaiApiKey) {
     apiKey = cfg.openaiApiKey;
-  } else if (provider === "openrouter" && cfg.openrouterApiKey) {
+    origemDaChave = 'chave_da_instalacao';
+  } else if (provider === 'openrouter' && cfg.openrouterApiKey) {
     apiKey = cfg.openrouterApiKey;
+    origemDaChave = 'chave_da_instalacao';
   } else {
     throw new LlmNotConfiguredError();
   }
@@ -346,6 +384,7 @@ export async function resolveOrgLlmConfig(
   return {
     provider,
     apiKey,
+    origemDaChave,
     defaultModel: settings.default_model ?? null,
     params: settings.params,
     enabledModels: settings.enabled_models,
