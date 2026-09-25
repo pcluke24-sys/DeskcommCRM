@@ -303,6 +303,31 @@ export const resolveActiveOrg = cache(async (authUser: AuthUser): Promise<Active
 });
 
 /**
+ * Controle da INSTALAÇÃO só existe no contexto da organização principal do
+ * dono. `is_platform_admin` sozinho atravessa tenants por desenho; usá-lo na
+ * atualização fazia o botão da VPS aparecer enquanto o dono navegava dentro
+ * de uma empresa cliente. A fonte da verdade é a seleção explícita protegida
+ * em `platform_primary_organization`; nunca a ordem das memberships.
+ */
+export async function isPlatformOwnerInPrimaryOrg(authUser: AuthUser): Promise<boolean> {
+  if (!authUser.is_platform_admin || authUser.support) return false;
+  const ativa = await resolveActiveOrg(authUser);
+  if (!ativa) return false;
+  const { data, error } = await createAdminClient()
+    .from("platform_primary_organization")
+    .select("organization_id")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) {
+    logger.error("[auth] falha ao resolver organização principal da instalação", {
+      error: error.message,
+    });
+    return false;
+  }
+  return Boolean(data?.organization_id && data.organization_id === ativa.orgId);
+}
+
+/**
  * For Server Components / Server Actions in /app/(app)/* routes — guarantees
  * an authenticated user. Redirects to /login if not.
  */
