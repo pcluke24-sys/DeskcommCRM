@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
 import { beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ insertError: { code: "", message: "" }, audit: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  insertError: { code: "", message: "" },
+  audit: vi.fn(),
+  principal: true,
+}));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: async () => null }));
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: async () => ({ id: "owner", is_platform_admin: true }),
+  isPlatformOwnerInPrimaryOrg: async () => mocks.principal,
 }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
 vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn() } }));
@@ -33,7 +38,21 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { POST } from "./route";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.principal = true;
+  mocks.insertError = { code: "", message: "" };
+});
+
+it("recusa a atualização quando o dono navega numa organização cliente", async () => {
+  mocks.principal = false;
+  const response = await POST(
+    new NextRequest("http://localhost/api/v1/system/update", { method: "POST" }),
+  );
+  expect(response.status).toBe(403);
+  expect((await response.json()).error.code).toBe("forbidden");
+  expect(mocks.audit).not.toHaveBeenCalled();
+});
 
 it("explica a preparação de extensão que bloqueia a atualização sem despachar um run", async () => {
   mocks.insertError = { code: "P0001", message: "extension_preparation_in_progress" };

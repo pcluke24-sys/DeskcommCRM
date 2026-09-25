@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-import { loadAuthUser } from "@/lib/auth/server";
+import { isPlatformOwnerInPrimaryOrg, loadAuthUser } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
 
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
+  isPlatformOwnerInPrimaryOrg: vi.fn(async (user: { is_platform_admin?: boolean }) => Boolean(user?.is_platform_admin)),
   mfaEmDivida: vi.fn(async () => false),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
@@ -42,6 +43,7 @@ let runSelectError: { message: string } | null;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(isPlatformOwnerInPrimaryOrg).mockImplementation(async (user) => user.is_platform_admin);
   inserted = null;
   runRow = null;
   runUpdatePatch = null;
@@ -154,6 +156,17 @@ describe("GET /api/v1/system/version", () => {
 
   it("entrega só a versão para quem não é dono do servidor", async () => {
     vi.mocked(loadAuthUser).mockResolvedValue(MEMBRO as never);
+    const { GET } = await import("../version/route");
+    const body = await (await GET(get())).json();
+    expect(body.data.current_version).toBe("1.0.0");
+    expect(body.data.is_owner).toBe(false);
+    expect(body.data.update_available).toBeUndefined();
+    expect(body.data.notes).toBeUndefined();
+  });
+
+  it("esconde a atualização do dono enquanto ele navega numa organização cliente", async () => {
+    vi.mocked(loadAuthUser).mockResolvedValue(OWNER as never);
+    vi.mocked(isPlatformOwnerInPrimaryOrg).mockResolvedValue(false);
     const { GET } = await import("../version/route");
     const body = await (await GET(get())).json();
     expect(body.data.current_version).toBe("1.0.0");

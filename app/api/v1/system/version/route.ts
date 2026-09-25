@@ -8,7 +8,7 @@
 import type { NextRequest } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
-import { loadAuthUser } from "@/lib/auth/server";
+import { isPlatformOwnerInPrimaryOrg, loadAuthUser } from "@/lib/auth/server";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractChangelogRange } from "@/lib/system/changelog";
@@ -164,7 +164,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
       ? run.from_version
       : current;
 
-  if (!user.is_platform_admin) {
+  if (!(await isPlatformOwnerInPrimaryOrg(user))) {
     return ok({ current_version: running, is_owner: false });
   }
 

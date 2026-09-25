@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { loadAuthUser } from "@/lib/auth/server";
+import { isPlatformOwnerInPrimaryOrg, loadAuthUser } from "@/lib/auth/server";
 import { UpdatePanel } from "./_components/UpdatePanel";
 
 export const metadata = { title: "Atualização do sistema" };
@@ -13,6 +13,6 @@ export const dynamic = "force-dynamic";
  */
 export default async function Page() {
   const user = await loadAuthUser();
-  if (!user?.is_platform_admin) notFound();
+  if (!user || !(await isPlatformOwnerInPrimaryOrg(user))) notFound();
   return <UpdatePanel />;
 }

@@ -10,7 +10,7 @@ import type { NextRequest } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { loadAuthUser } from "@/lib/auth/server";
+import { isPlatformOwnerInPrimaryOrg, loadAuthUser } from "@/lib/auth/server";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRunStale } from "@/lib/system/update-run";
@@ -27,7 +27,7 @@ export async function POST(_req: NextRequest): Promise<Response> {
   // `unauthenticated` (não `unauthorized`): esse último é reservado ao segredo
   // interno das rotas host↔app (lib/api/errors.ts) — aqui falta é sessão.
   if (!user) return fail("unauthenticated", "Faça login para continuar.", 401);
-  if (!user.is_platform_admin) {
+  if (!(await isPlatformOwnerInPrimaryOrg(user))) {
     return fail("forbidden", "Só o dono do servidor pode atualizar o sistema.", 403);
   }
 
