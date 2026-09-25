@@ -100,6 +100,43 @@ async function ensurePlatformAdmin(userId: string): Promise<void> {
 }
 
 /**
+ * A tela de atualização agora exige as duas condições que existem em produção:
+ * ser dono da instalação E estar navegando na organização principal. O seed já
+ * garantia a primeira, mas deixava a segunda indefinida; por isso toda a spec
+ * recebia 404 antes mesmo de testar os estados da atualização.
+ *
+ * Usa a RPC administrativa em vez de escrever na tabela diretamente. Além de
+ * reproduzir o caminho protegido da aplicação, isso continua funcionando após
+ * a migration 9005, que deixou `platform_primary_organization` somente para
+ * leitura pelo service role.
+ */
+async function ensurePrimaryOrganization(userId: string): Promise<void> {
+  const { data: membership, error: membershipError } = await admin
+    .from("user_organizations")
+    .select("organization_id")
+    .eq("user_id", userId)
+    .is("revoked_at", null)
+    .order("accepted_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (membershipError) {
+    throw new Error(`ler organização do dono: ${membershipError.message}`);
+  }
+  const organizationId = (membership as { organization_id?: string } | null)?.organization_id;
+  if (!organizationId) {
+    throw new Error(`o dono ${userId} não possui organização ativa para marcar como principal`);
+  }
+
+  const { error } = await admin.rpc("fn_set_primary_organization", {
+    p_org: organizationId,
+    p_actor: userId,
+    p_request_id: crypto.randomUUID(),
+  } as never);
+  if (error) throw new Error(`definir organização principal: ${error.message}`);
+  console.log(`[seed] organização principal garantida: ${organizationId}`);
+}
+
+/**
  * Devolve o `e2e-admin` ao que ele deve ser: admin de TENANT, sem escape de
  * plataforma. Roda sempre, mesmo quando a linha já está revogada — é o que cura
  * um banco contaminado por uma execução anterior deste seed.
@@ -142,7 +179,10 @@ async function revogarPlatformAdmin(userId: string, razao: string): Promise<void
 }
 
 async function resetSystemVersion(): Promise<void> {
-  const { error: delError } = await admin.from("system_update_runs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+  const { error: delError } = await admin
+    .from("system_update_runs")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000");
   if (delError) throw new Error(`delete system_update_runs: ${delError.message}`);
 
   const { error: updError } = await admin
@@ -171,9 +211,11 @@ async function main(): Promise<void> {
       "creds.users.dono ausente — rode `pnpm exec tsx scripts/seed-e2e-credentials.ts` primeiro " +
         "(o quinto usuário do seed base é quem vira dono do servidor)",
     );
-  if (!adminUser) throw new Error("creds.users.admin ausente — rode seed-e2e-credentials.ts primeiro");
+  if (!adminUser)
+    throw new Error("creds.users.admin ausente — rode seed-e2e-credentials.ts primeiro");
 
   await ensurePlatformAdmin(donoUser.id);
+  await ensurePrimaryOrganization(donoUser.id);
   await revogarPlatformAdmin(
     adminUser.id,
     "seed e2e — o admin de tenant compartilhado nunca é dono do servidor; " +
