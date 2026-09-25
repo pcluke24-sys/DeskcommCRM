@@ -24,35 +24,17 @@ interface CadeiaContagem {
 
 interface OpcoesFake {
   missing?: boolean;
-  /** DELETE de messages/conversations falha com 23503 (comportamento de antes da #752). */
-  fk?: boolean;
-  /** Só o DELETE da ficha (contacts) falha com 23503. */
-  fkNaFicha?: boolean;
   /** Quantos vínculos RESTRICT a pré-checagem encontra na agenda. */
   vinculos?: number;
   /** A contagem do vínculo falha (tabela/RLS fora do ar). */
   erroContagem?: { message: string };
+  /** A RPC atômica falha como uma FK RESTRICT; nada pode ficar parcialmente apagado. */
+  fkNaFicha?: boolean;
 }
 
 function clienteFalso(opts?: OpcoesFake): unknown {
   return {
     from: (tabela: string) => {
-      const erroDoDelete =
-        (opts?.fk && tabela !== "contacts") || (opts?.fkNaFicha && tabela === "contacts")
-          ? { code: "23503", message: "fk" }
-          : null;
-      const del = {
-        eq: () => del,
-        select: () => del,
-        // O DELETE da ficha passa por `.select("id").maybeSingle()`: o erro do
-        // 23503 tem de sair por aqui, não só pelo `then` (que serve os DELETE
-        // de messages/conversations, aguardados direto).
-        maybeSingle: async () =>
-          opts?.missing
-            ? { data: null, error: erroDoDelete }
-            : { data: { id: CONTATO }, error: erroDoDelete },
-        then: (r: (v: unknown) => unknown) => r({ error: erroDoDelete }),
-      };
       return {
         // `select("id", {count, head})` é a pré-checagem de vínculo: só conta.
         select: (_colunas?: string, opcoes?: { count?: string; head?: boolean }) => {
@@ -86,13 +68,18 @@ function clienteFalso(opts?: OpcoesFake): unknown {
             }),
           };
         },
-        delete: () => {
-          chamadas.push({ tabela, op: "delete" });
-          return del;
-        },
       };
     },
-    rpc: () => ({ then: (r: (v: unknown) => unknown) => r({ error: null }) }),
+    rpc: (nome: string) => {
+      if (nome === "fn_delete_contact_atomic") {
+        chamadas.push({ tabela: "fn_delete_contact_atomic", op: "rpc" });
+        return Promise.resolve({
+          data: opts?.missing ? null : CONTATO,
+          error: opts?.fkNaFicha ? { code: "23503", message: "fk" } : null,
+        });
+      }
+      return { then: (r: (v: unknown) => unknown) => r({ error: null }) };
+    },
   };
 }
 
@@ -110,7 +97,7 @@ describe("deleteContactHandler", () => {
     chamadas.length = 0;
   });
 
-  it("apaga mensagens e conversas antes do contato e audita", async () => {
+  it("apaga histórico e contato numa única RPC atômica e audita", async () => {
     const { deleteContactHandler } = await import("@/app/api/v1/contacts/_handler");
     const out = await deleteContactHandler(
       clienteFalso() as never,
@@ -118,7 +105,7 @@ describe("deleteContactHandler", () => {
       CONTATO,
     );
     expect(out).toEqual({ id: CONTATO });
-    expect(chamadas.map((c) => c.tabela)).toEqual(["messages", "conversations", "contacts"]);
+    expect(chamadas.map((c) => c.tabela)).toEqual(["fn_delete_contact_atomic"]);
     // A pré-checagem da #752 conta o vínculo com os DOIS filtros (contato +
     // organização): sem o de organização, contato de outra org bloquearia.
     expect(contagens).toEqual([
@@ -148,18 +135,16 @@ describe("deleteContactHandler", () => {
     });
   });
 
-  it("ficha falha depois do histórico apagado: audita o que saiu e propaga o 409", async () => {
+  it("falha atomica da ficha: audita e nao deixa historico parcialmente apagado", async () => {
     const { deleteContactHandler } = await import("@/app/api/v1/contacts/_handler");
     await expect(
       deleteContactHandler(clienteFalso({ fkNaFicha: true }) as never, ctxFalso(), CONTATO),
     ).rejects.toMatchObject({ status: 409, code: "state_conflict" });
-    expect(chamadas.map((c) => c.tabela)).toEqual(["messages", "conversations", "contacts"]);
-    // Se o RESTRICT escapar da pré-checagem (corrida, RLS, tabela nova), o
-    // estrago fica registrado em vez de sumir.
+    expect(chamadas.map((c) => c.tabela)).toEqual(["fn_delete_contact_atomic"]);
     expect(ultimaAuditoria()).toMatchObject({
       action: "contact.delete_blocked",
       resourceId: CONTATO,
-      metadata: { motivo: "falha_ao_apagar", vinculos: [], apagados: ["messages", "conversations"] },
+      metadata: { motivo: "falha_ao_apagar", vinculos: [], apagados: [] },
     });
   });
 
