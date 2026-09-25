@@ -20592,7 +20592,10 @@ begin
     or new.payload->'source_step_key' is distinct from old.payload->'source_step_key'
    then raise exception 'followup_job_origin_immutable' using errcode='42501'; end if;
   end if;
- elsif auth.uid() is not null and ((tg_op<>'DELETE' and new.idempotency_key ~ ':[0-9]+$') or (tg_op<>'INSERT' and old.idempotency_key ~ ':[0-9]+$')) then
+ elsif auth.uid() is not null
+       and pg_trigger_depth() <= 1
+       and current_setting('deskcomm.exclusao_contato', true) is distinct from 'on'
+       and ((tg_op<>'DELETE' and new.idempotency_key ~ ':[0-9]+$') or (tg_op<>'INSERT' and old.idempotency_key ~ ':[0-9]+$')) then
   raise exception 'followup_step_internal' using errcode='42501';
  end if;
  if tg_op='DELETE' then return old; end if;
@@ -37488,7 +37491,10 @@ begin
     or new.payload->'source_step_key' is distinct from old.payload->'source_step_key'
    then raise exception 'followup_job_origin_immutable' using errcode='42501'; end if;
   end if;
- elsif auth.uid() is not null and ((tg_op<>'DELETE' and new.idempotency_key ~ ':[0-9]+$') or (tg_op<>'INSERT' and old.idempotency_key ~ ':[0-9]+$')) then
+ elsif auth.uid() is not null
+       and pg_trigger_depth() <= 1
+       and current_setting('deskcomm.exclusao_contato', true) is distinct from 'on'
+       and ((tg_op<>'DELETE' and new.idempotency_key ~ ':[0-9]+$') or (tg_op<>'INSERT' and old.idempotency_key ~ ':[0-9]+$')) then
   raise exception 'followup_step_internal' using errcode='42501';
  end if;
  if tg_op='DELETE' then return old; end if;
