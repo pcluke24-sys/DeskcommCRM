@@ -322,6 +322,13 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
     marcas: ["deskcommcrm", "deskcommcrm", "deskcommcrm"],
   },
 
+  "lib/system/official-release.ts": {
+    categoria: "PROTOCOLO",
+    motivo:
+      "identificador do repositório upstream consultado para avisar o operador da organização principal sobre releases oficiais. Não é marca de interface: trocar pelo nome do revendedor faria o aviso consultar o fork e deixaria de detectar novidades do projeto de origem",
+    marcas: ["deskcommcrm"],
+  },
+
   // ─── PADRAO — a marca padrão precisa existir em algum lugar. ───
   "lib/branding.ts": {
     categoria: "PADRAO",
@@ -827,6 +834,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     categoria: "FORNECEDOR",
     motivo:
       "endpoint da API da OpenAI (embeddings da busca e transcrição de áudio). É o destino do request: trocar pelo domínio do revendedor faria a chamada não chegar a lugar nenhum.",
+  },
+  "api.github.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint da API do GitHub consultado por `lib/system/official-release.ts` para descobrir a release oficial mais recente. A consulta é somente informativa e restrita à organização principal; trocar o host impediria detectar novas versões upstream.",
   },
   "api.typesafe.ai": {
     categoria: "FORNECEDOR",
