@@ -87,6 +87,7 @@ export function UpdatePanel() {
 
   const versao = semV(data.current_version);
   const nova = semV(data.latest_version);
+  const oficial = semV(data.official_latest_version);
 
   if (rodando) {
     /**
@@ -321,6 +322,23 @@ export function UpdatePanel() {
           )}
         </p>
         <Comando comando={COMANDO_MANUAL} />
+      </Layout>
+    );
+  }
+
+  if (!data.update_available && data.official_update_available && oficial) {
+    return (
+      <Layout titulo={`${t("Nova versão oficial")} ${oficial}`}>
+        <p className="text-sm">
+          {t(
+            "A nova versão oficial já foi identificada. Estamos preparando a edição personalizada desta instalação para preservar suas configurações e recursos.",
+          )}
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {t(
+            "O botão de instalar aparece aqui automaticamente assim que a versão personalizada passar pelos testes. Nenhuma organização cliente recebe este aviso ou acesso à atualização.",
+          )}
+        </p>
       </Layout>
     );
   }

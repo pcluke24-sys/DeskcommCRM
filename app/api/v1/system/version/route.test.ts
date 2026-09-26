@@ -4,6 +4,8 @@ import { NextRequest } from "next/server";
 import { isPlatformOwnerInPrimaryOrg, loadAuthUser } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
+import { versaoOficialMaisRecente } from "@/lib/system/official-release";
+import type * as OfficialReleaseModule from "@/lib/system/official-release";
 
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
@@ -12,6 +14,10 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
+vi.mock("@/lib/system/official-release", async (importOriginal) => {
+  const original = await importOriginal<typeof OfficialReleaseModule>();
+  return { ...original, versaoOficialMaisRecente: vi.fn(async () => "1.2.0") };
+});
 
 const OWNER = { id: "11111111-1111-4111-8111-111111111111", email: "dono@x.com", is_platform_admin: true };
 const MEMBRO = { ...OWNER, id: "22222222-2222-4222-8222-222222222222", is_platform_admin: false };
@@ -43,6 +49,7 @@ let runSelectError: { message: string } | null;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(versaoOficialMaisRecente).mockResolvedValue("1.2.0");
   vi.mocked(isPlatformOwnerInPrimaryOrg).mockImplementation(async (user) => user.is_platform_admin);
   inserted = null;
   runRow = null;
@@ -162,6 +169,8 @@ describe("GET /api/v1/system/version", () => {
     expect(body.data.is_owner).toBe(false);
     expect(body.data.update_available).toBeUndefined();
     expect(body.data.notes).toBeUndefined();
+    expect(body.data.official_update_available).toBeUndefined();
+    expect(versaoOficialMaisRecente).not.toHaveBeenCalled();
   });
 
   it("esconde a atualização do dono enquanto ele navega numa organização cliente", async () => {
@@ -173,6 +182,8 @@ describe("GET /api/v1/system/version", () => {
     expect(body.data.is_owner).toBe(false);
     expect(body.data.update_available).toBeUndefined();
     expect(body.data.notes).toBeUndefined();
+    expect(body.data.official_update_available).toBeUndefined();
+    expect(versaoOficialMaisRecente).not.toHaveBeenCalled();
   });
 
   it("entrega o estado completo e a faixa do CHANGELOG para o dono", async () => {
@@ -180,6 +191,8 @@ describe("GET /api/v1/system/version", () => {
     const { GET } = await import("../version/route");
     const body = await (await GET(get())).json();
     expect(body.data.update_available).toBe(true);
+    expect(body.data.official_latest_version).toBe("1.2.0");
+    expect(body.data.official_update_available).toBe(true);
     expect(body.data.notes.sections.map((s: { version: string }) => s.version)).toEqual(["1.1.0"]);
     expect(body.data.notes.sections[0].body).toContain("botão");
     expect(body.data.notes.requires_attention).toEqual([

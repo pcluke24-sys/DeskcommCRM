@@ -9,6 +9,10 @@ export interface SystemVersion {
   is_owner: boolean;
   latest_version?: string;
   update_available?: boolean;
+  /** Release do projeto oficial; é aviso, nunca alvo direto da instalação. */
+  official_latest_version?: string;
+  /** Há novidade oficial mesmo que a build personalizada ainda não esteja pronta. */
+  official_update_available?: boolean;
   off_release?: boolean;
   /** O host não conseguiu comparar a versão instalada com a última publicada. */
   compare_failed?: boolean;

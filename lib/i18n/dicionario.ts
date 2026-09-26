@@ -5037,6 +5037,13 @@ export const DICIONARIO: Traducoes = {
   },
   "Você está na versão": { es: "Estás en la versión" },
   "É a mais recente. Não há nada a fazer.": { es: "Es la más reciente. No hay nada que hacer." },
+  "Nova versão oficial": { es: "Nueva versión oficial" },
+  "A nova versão oficial já foi identificada. Estamos preparando a edição personalizada desta instalação para preservar suas configurações e recursos.": {
+    es: "Ya identificamos la nueva versión oficial. Estamos preparando la edición personalizada de esta instalación para conservar sus ajustes y funciones.",
+  },
+  "O botão de instalar aparece aqui automaticamente assim que a versão personalizada passar pelos testes. Nenhuma organização cliente recebe este aviso ou acesso à atualização.": {
+    es: "El botón para instalar aparecerá aquí automáticamente cuando la versión personalizada supere las pruebas. Ninguna organización cliente recibe este aviso ni acceso a la actualización.",
+  },
   "Ainda não há nenhuma versão publicada": { es: "Todavía no hay ninguna versión publicada" },
   "Este projeto ainda não tem nenhuma versão publicada para comparar com a sua instalação — normal em um fork novo ou recém-criado a partir do código-fonte.": {
     es: "Este proyecto aún no tiene ninguna versión publicada con la que comparar tu instalación. Es normal en un fork nuevo o recién creado a partir del código fuente.",

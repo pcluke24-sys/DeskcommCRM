@@ -29,7 +29,7 @@ export function VersionFooter({
   // conta: uma instalação de desenvolvimento sem versão publicada mais nova
   // ficava com o ponto pulsando pra sempre, e o texto "Nova versão · " com o
   // número vazio, apontando para uma tela que não tem o que oferecer.
-  const alerta = data.is_owner && data.update_available;
+  const alerta = data.is_owner && (data.update_available || data.official_update_available);
 
   if (!alerta) {
     return (
@@ -45,12 +45,15 @@ export function VersionFooter({
     );
   }
 
-  const novo = data.latest_version?.replace(/^v/i, "") ?? "";
+  const novo = (
+    data.update_available ? data.latest_version : data.official_latest_version
+  )?.replace(/^v/i, "") ?? "";
+  const rotulo = data.update_available ? t("Nova versão") : t("Nova versão oficial");
   return (
     <Link
       href="/app/settings/atualizacao"
       onClick={onNavigate}
-      title={`${t("Nova versão")} ${novo} ${t("disponível")}`}
+      title={`${rotulo} ${novo} ${t("disponível")}`}
       className={cn(
         "flex items-center gap-2 rounded-md px-3 py-2 text-xs text-foreground hover:bg-accent/50",
         collapsed && "justify-center px-2",
@@ -62,7 +65,7 @@ export function VersionFooter({
       </span>
       {!collapsed && (
         <span className="truncate">
-          {t("Nova versão")}
+          {rotulo}
           {novo ? ` · ${novo}` : ""}
         </span>
       )}

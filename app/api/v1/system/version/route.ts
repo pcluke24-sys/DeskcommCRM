@@ -13,6 +13,10 @@ import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractChangelogRange } from "@/lib/system/changelog";
 import {
+  versaoOficialMaisRecente,
+  versaoPublicadaMaisNova,
+} from "@/lib/system/official-release";
+import {
   isRunStale,
   rodadaDoBancoDaLinha,
   rollbackDesmentidoPeloApp,
@@ -169,6 +173,12 @@ export async function GET(_req: NextRequest): Promise<Response> {
   }
 
   const latest = version?.latest_version ?? "";
+  // Esta é notícia, não alvo de instalação. O alvo seguro continua sendo
+  // `latest_version`, publicado pelo fork que contém as personalizações.
+  const officialLatest = await versaoOficialMaisRecente();
+  const officialUpdateAvailable = officialLatest
+    ? versaoPublicadaMaisNova(officialLatest, running)
+    : false;
   // A faixa INTEIRA entre o que está no ar e o que vai entrar, não só a seção
   // da versão-alvo. Mostrar só a alvo perdia aviso: quem pulava da 1.4.0 para a
   // 1.6.0 nunca lia a 1.4.1 nem a 1.5.0 — e a 1.4.1 existia para corrigir uma
@@ -183,6 +193,8 @@ export async function GET(_req: NextRequest): Promise<Response> {
     current_version: running,
     is_owner: true,
     latest_version: latest,
+    official_latest_version: officialLatest ?? undefined,
+    official_update_available: officialUpdateAvailable,
     update_available:
       // `!acabouDeInstalar` é o degrau histórico: na janela logo após um
       // sucesso, o host ainda não bateu, `current` nomeia a versão antiga e a
