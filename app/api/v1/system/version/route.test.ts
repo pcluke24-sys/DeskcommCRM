@@ -191,14 +191,26 @@ describe("GET /api/v1/system/version", () => {
     const { GET } = await import("../version/route");
     const body = await (await GET(get())).json();
     expect(body.data.update_available).toBe(true);
-    expect(body.data.official_latest_version).toBe("1.2.0");
-    expect(body.data.official_update_available).toBe(true);
+    expect(body.data.official_latest_version).toBeUndefined();
+    expect(body.data.official_update_available).toBe(false);
+    expect(versaoOficialMaisRecente).not.toHaveBeenCalled();
     expect(body.data.notes.sections.map((s: { version: string }) => s.version)).toEqual(["1.1.0"]);
     expect(body.data.notes.sections[0].body).toContain("botão");
     expect(body.data.notes.requires_attention).toEqual([
       { version: "1.1.0", texto: expect.stringContaining("reconecte o número") },
     ]);
     expect(body.data.notes.complete).toBe(true);
+  });
+
+  it("consulta a versão oficial quando não há atualização personalizada disponível", async () => {
+    versionRow.latest_version = "1.0.0";
+    vi.mocked(loadAuthUser).mockResolvedValue(OWNER as never);
+    const { GET } = await import("../version/route");
+    const body = await (await GET(get())).json();
+    expect(body.data.update_available).toBe(false);
+    expect(body.data.official_latest_version).toBe("1.2.0");
+    expect(body.data.official_update_available).toBe(true);
+    expect(versaoOficialMaisRecente).toHaveBeenCalledOnce();
   });
 
   it("entrega TODAS as seções entre a instalada e a alvo, com o aviso do meio nomeado", async () => {

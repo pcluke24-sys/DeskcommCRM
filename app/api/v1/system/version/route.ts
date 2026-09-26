@@ -173,9 +173,12 @@ export async function GET(_req: NextRequest): Promise<Response> {
   }
 
   const latest = version?.latest_version ?? "";
+  const updateAvailable = Boolean(latest) && latest !== running && !acabouDeInstalar;
   // Esta é notícia, não alvo de instalação. O alvo seguro continua sendo
-  // `latest_version`, publicado pelo fork que contém as personalizações.
-  const officialLatest = await versaoOficialMaisRecente();
+  // `latest_version`, publicado pelo fork que contém as personalizações. Se
+  // esse alvo seguro já existe, ele tem prioridade e não precisamos atrasar o
+  // polling da tela com uma consulta externa ao GitHub.
+  const officialLatest = updateAvailable ? null : await versaoOficialMaisRecente();
   const officialUpdateAvailable = officialLatest
     ? versaoPublicadaMaisNova(officialLatest, running)
     : false;
@@ -204,7 +207,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
       // versão confirmada é a antiga, em vez de afirmar a nova e não voltar
       // atrás nunca. `sucessoJaInstalado` fecha a janela sozinho passados
       // `RUN_STALE_AFTER_MS` do fim do run.
-      Boolean(latest) && latest !== running && !acabouDeInstalar,
+      updateAvailable,
     off_release: version?.off_release ?? false,
     // Sem isto, a tela lê "sem versão nova anunciada" como "você está em dia" —
     // e uma instalação atrasada cujo host não conseguiu comparar é informada de
