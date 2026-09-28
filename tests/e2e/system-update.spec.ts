@@ -247,6 +247,10 @@ test("o dono vê a versão nova na sidebar e atualiza pela tela", async ({ page,
   const changelog =
     "## [1.1.0] — 2026-08-02\n\n**⚠️ Requer atenção**\n\nReconecte o número depois.\n\n### Adicionado\n\n- Botão de atualizar pela tela.\n";
 
+  // O caso anterior termina em 1.2.0. O heartbeat do host é monotônico e não
+  // deve rebaixar a versão-alvo para 1.1.0, portanto este percurso precisa
+  // começar de um estado limpo em vez de depender da ordem/partição da suíte.
+  resetEstado();
   await loginWithTotp(page, creds.users.dono!.email, creds.dono_totp!.secret);
   await heartbeat(request, { latest_version: "1.1.0", changelog });
   await page.goto("/app/inbox");
