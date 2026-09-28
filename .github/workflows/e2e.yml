@@ -635,14 +635,13 @@ jobs:
         conversa-vira-lead.spec.ts contato-salva-email.spec.ts
         confirmar-dado-do-contato.spec.ts
         credenciais-de-ia.spec.ts
-        risk-radar.spec.ts invite-lifecycle.spec.ts system-update.spec.ts
+        invite-lifecycle.spec.ts
         agente-novo-e-uso.spec.ts
         agente-papeis-operador.spec.ts
         followup-linguagem.spec.ts followup-ramos.spec.ts
-        wizard-do-funcionario.spec.ts mfa-opcional.spec.ts inbox-responder-citando.spec.ts
+        mfa-opcional.spec.ts inbox-responder-citando.spec.ts
         agenda-tela-do-produto.spec.ts
         notificacoes-diz-o-que-falta.spec.ts
-        relogio-http-cron-externo.spec.ts
         j20-elegibilidade-respondi.spec.ts j20-elegibilidade-followup.spec.ts
         j20-elegibilidade-atendimento-manual.spec.ts
         juntar-contatos-duplicados.spec.ts
@@ -650,10 +649,7 @@ jobs:
         motivos-de-perda-do-funil.spec.ts
         importar-leads-planilha.spec.ts
         prova-painel-provedores.spec.ts
-        relatorio-de-atividades.spec.ts
         canal-mudo-avisa-na-central.spec.ts
-        qa-l12-troca-de-funil.spec.ts
-        qa-l12-agente-ia.spec.ts
       # ⚠️ A ORDEM DESTA LISTA NÃO DECIDE A ORDEM DE EXECUÇÃO. O Playwright
       # ordena os arquivos por CAMINHO, não pela ordem em que são passados na
       # linha de comando. Medido no run 31838253496: `marca-logo.spec.ts` estava
@@ -1072,6 +1068,13 @@ jobs:
       # `JEV_API_BASE_URL` que o `.env.e2e` grava), semeia a entrada de mensagens
       # com o seed da `conversa-vira-lead` e apaga a chave e o `settings.jev` que
       # criou, antes e depois. PREVISÃO, não medida: ~1,5 min de Playwright.
+      #
+      # Rebalanceamento mínimo de 2026-09-26, medido no run 36253609943: a
+      # PARTE_1 chegou ao corte antecipado depois de 17m24s de suíte, sem nenhum
+      # caso vermelho, enquanto a PARTE_5 terminou. A cauda alfabética abaixo
+      # saiu inteira da parte 1 (uma única fronteira de vizinhança, em vez de
+      # espalhar arquivos) e veio para a parte comum com folga. A parte 4
+      # continua fechada para instalação fresca.
       SPECS_PARTE_5: >-
         inbox-busca-e-filtros-dizem-a-verdade.spec.ts
         extensoes-da-instalacao.spec.ts
@@ -1095,6 +1098,13 @@ jobs:
         olhar-telas-do-epico.spec.ts
         jev-decisoes-rapidas.spec.ts
         buffer-ssr-caixa-orfa.spec.ts
+        qa-l12-agente-ia.spec.ts
+        qa-l12-troca-de-funil.spec.ts
+        relatorio-de-atividades.spec.ts
+        relogio-http-cron-externo.spec.ts
+        risk-radar.spec.ts
+        system-update.spec.ts
+        wizard-do-funcionario.spec.ts
 
       # ─── FORA_DO_CI — as que ficaram fora, e o motivo de cada uma ───
       #
