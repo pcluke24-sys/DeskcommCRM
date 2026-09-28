@@ -28,6 +28,8 @@ import { useDefaultPipeline } from "@/hooks/pipelines/useDefaultPipeline";
 import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
 import { CustomFieldsEditor, type CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 import { useEditLead } from "@/hooks/kanban/useUpdateLead";
+import { useBulkAction } from "@/hooks/kanban/useBulkAction";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
@@ -53,15 +55,9 @@ interface LeadRow {
   field_defs: CustomFieldDef[];
   funil_nome: string | null;
   etapa_nome: string | null;
-}
-
-interface StageRow {
-  id: string;
-  pipeline_id: string;
-  name: string;
-  position: number;
-  is_won: boolean;
-  is_lost: boolean;
+  stage_id?: string;
+  /** As etapas ativas do funil, na ordem do quadro (rota crm-summary). */
+  etapas_do_funil?: Array<{ id: string; name: string; is_won: boolean; is_lost: boolean }>;
 }
 
 interface OrderRow {
@@ -354,13 +350,11 @@ const CLASSES_DE_ONDE_ESTA = "line-clamp-2 text-muted-foreground";
 
 function InboxLeadEditor({
   leads,
-  stages,
   selecionadoId,
   onSelecionar,
   onSalvo,
 }: {
   leads: LeadRow[];
-  stages: StageRow[];
   selecionadoId: string | null;
   onSelecionar: (id: string) => void;
   onSalvo: () => void;
@@ -408,6 +402,7 @@ function InboxLeadEditor({
           </p>
         </div>
       )}
+      <EtapaDoNegocio key={`etapa-${ativo.id}`} lead={ativo} onMovido={onSalvo} />
       <CamposDoFunil
         key={ativo.id}
         leadId={ativo.id}
@@ -416,56 +411,56 @@ function InboxLeadEditor({
         valores={ativo.custom_fields ?? {}}
         onSalvo={onSalvo}
       />
-      <MoverLeadPeloInbox key={`${ativo.id}:${ativo.updated_at}`} lead={ativo} stages={stages.filter((stage) => stage.pipeline_id === ativo.pipeline_id)} onSalvo={onSalvo} />
       <OrigemDoLead lead={ativo} />
     </div>
   );
 }
 
-/** O Inbox chama a mesma rota do Kanban, preservando histórico e conversões. */
-function MoverLeadPeloInbox({ lead, stages, onSalvo }: { lead: LeadRow; stages: StageRow[]; onSalvo: () => void }) {
+/**
+ * Mover o negócio de etapa SEM sair da conversa — ex.: passar a "Pedido
+ * confirmado" quando o cliente confirma pelo WhatsApp. Antes só dava pelo quadro
+ * do funil: quem atendia tinha de sair da conversa, achar o card e arrastá-lo.
+ *
+ * Usa o MESMO caminho do "Mover para…" do quadro (`/api/v1/leads/bulk`, que
+ * posiciona o card no banco e emite atividade, evento e auditoria), então a
+ * etapa que avisa na Central avisa igual. Etapa de PERDA fica de fora: ela pede
+ * o motivo, e esse diálogo mora no quadro.
+ */
+function EtapaDoNegocio({ lead, onMovido }: { lead: LeadRow; onMovido: () => void }) {
   const t = useT();
-  const [stageId, setStageId] = useState(lead.stage_id);
-  const [salvando, setSalvando] = useState(false);
+  const mover = useBulkAction(lead.pipeline_id);
+  const etapas = (lead.etapas_do_funil ?? []).filter((e) => !e.is_lost || e.id === lead.stage_id);
+  if (!lead.stage_id || etapas.length === 0) return null;
 
-  const etapaAtual = stages.find((stage) => stage.id === lead.stage_id);
-  const podeMover = lead.status === "open" && stages.length > 0;
-
-  async function mover() {
-    if (!podeMover || stageId === lead.stage_id) return;
-    setSalvando(true);
+  async function escolher(stageId: string) {
+    if (stageId === lead.stage_id) return;
     try {
-      await apiClient.post(`/api/v1/leads/${lead.id}/move`, {
-        stage_id: stageId,
-        // O Inbox não conhece os vizinhos da coluna; um timestamp mantém uma
-        // posição distinta e a rota central preserva a concorrência.
-        position_in_stage: Date.now(),
-        expected_updated_at: lead.updated_at,
-      });
-      toast.success(t("Lead movido no funil."));
-      onSalvo();
+      await mover.mutateAsync({ action: "move", lead_ids: [lead.id], params: { stage_id: stageId } });
+      toast.success(t("Etapa atualizada."));
+      onMovido();
     } catch {
-      // A API exibe o erro; a recarga mostra quem venceu uma corrida entre abas.
-      onSalvo();
-    } finally {
-      setSalvando(false);
+      // o hook já mostrou o erro
     }
   }
 
   return (
-    <section className="rounded-md border border-border p-2 text-xs" data-testid="inbox-mover-lead">
-      <div className="font-medium">{t("Etapa do funil")}</div>
-      <div className="mt-1 flex gap-2">
-        <select aria-label={t("Mover lead para etapa")} value={stageId} disabled={!podeMover || salvando} onChange={(event) => setStageId(event.target.value)} className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1">
-          {stages.map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}
-        </select>
-        <Button size="sm" className="h-7 text-xs" disabled={!podeMover || salvando || stageId === lead.stage_id} onClick={() => void mover()}>
-          {salvando ? t("Movendo…") : t("Mover")}
-        </Button>
-      </div>
-      {!podeMover && <p className="mt-1 text-muted-foreground">{lead.status === "open" ? t("Não há etapas disponíveis neste funil.") : t("Lead encerrado: abra uma nova oportunidade para movê-lo.")}</p>}
-      {etapaAtual && <p className="mt-1 text-muted-foreground">{t("Etapa atual")}: {etapaAtual.name}</p>}
-    </section>
+    <div className="space-y-1" data-testid="inbox-etapa-do-negocio">
+      <label className="block text-xs font-medium text-text" htmlFor={`etapa-${lead.id}`}>
+        {t("Etapa do funil")}
+      </label>
+      <Select value={lead.stage_id} onValueChange={(v) => void escolher(v)} disabled={mover.isPending}>
+        <SelectTrigger id={`etapa-${lead.id}`} className="h-8 w-full text-xs" data-testid="inbox-etapa-select">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {etapas.map((e) => (
+            <SelectItem key={e.id} value={e.id} className="text-xs">
+              {e.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -477,7 +472,12 @@ function OrigemDoLead({ lead }: { lead: LeadRow }) {
     <section className="rounded-md border border-border p-2 text-xs" data-testid="inbox-origem-lead">
       <div className="font-medium">{t("Origem do lead")}</div>
       <dl className="mt-1 space-y-0.5 text-muted-foreground">
-        {atributos.map((atributo) => <div key={atributo.rotulo} className="flex gap-1"><dt>{t(atributo.rotulo)}:</dt><dd className="min-w-0 truncate">{atributo.valor}</dd></div>)}
+        {atributos.map((atributo) => (
+          <div key={atributo.rotulo} className="flex gap-1">
+            <dt>{t(atributo.rotulo)}:</dt>
+            <dd className="min-w-0 truncate">{atributo.valor}</dd>
+          </div>
+        ))}
       </dl>
     </section>
   );
@@ -553,7 +553,6 @@ export function CRMSidePanel({ conversation }: Props) {
   const [enrichment, setEnrichment] = useState<(ProspectEnrichment & { collected_at: string }) | null>(null);
   const [enrichmentError, setEnrichmentError] = useState(false);
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
-  const [stages, setStages] = useState<StageRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [activities, setActivities] = useState<ActivityRow[] | null>(null);
   const [demandas, setDemandas] = useState<DemandaRow[] | null>(null);
@@ -584,7 +583,6 @@ export function CRMSidePanel({ conversation }: Props) {
   useEffect(() => {
     if (!contactId) {
       setLeads(null);
-      setStages([]);
       setOrders(null);
       setActivities(null);
       setDemandas(null);
@@ -619,7 +617,6 @@ export function CRMSidePanel({ conversation }: Props) {
         setEnrichment(r.data.enrichment ?? null);
         setEnrichmentError(r.data.enrichment_error ?? false);
         setLeads(r.data.leads);
-        setStages(r.data.stages ?? []);
         setOrders(r.data.orders);
         setActivities(r.data.activities);
         // `?? []` e não `?? null`: aqui a leitura DEU CERTO. Cair em `null`
@@ -634,7 +631,6 @@ export function CRMSidePanel({ conversation }: Props) {
         // não conseguiu ler — nunca que não há.
         setErro(true);
         setLeads(null);
-        setStages([]);
         setOrders(null);
         setActivities(null);
         setDemandas(null);
@@ -841,7 +837,7 @@ export function CRMSidePanel({ conversation }: Props) {
       <section data-testid="inbox-memoria">
         <h3 className="text-xs font-semibold">{t("Memória do contato")}</h3>
         <p className="mt-1 text-xs text-muted-foreground">{t("Fatos duráveis registrados nas notas. Pendências pertencem à demanda vigente.")}</p>
-        {!sectionsLoading && fatos.map((f) => <details key={f.id} className="mt-2 text-xs"><summary>{f.headline}</summary><p className="mt-1 whitespace-pre-wrap">{f.body}</p></details>)}
+        {!sectionsLoading && fatos.map((f) => <details key={f.id} className="mt-2 text-xs"><summary className="wrap-anywhere">{f.headline}</summary><p className="mt-1 whitespace-pre-wrap wrap-anywhere">{f.body}</p></details>)}
         {!sectionsLoading && fatos.length === 0 && <p className="mt-2 text-xs text-muted-foreground">{t("Nenhum fato durável registrado.")}</p>}
         {!sectionsLoading && historico.length > 0 && <div className="mt-3 text-xs"><h4>{t("Histórico encerrado — sem tarefas pendentes")}</h4>{historico.map((h) => <p key={h.id}>{t(DESFECHO_LEGIVEL[h.desfecho] ?? h.desfecho)}{h.fechada_em ? ` · ${shortDate(h.fechada_em, localeDaData)}` : ""}</p>)}</div>}
       </section>
@@ -860,7 +856,6 @@ export function CRMSidePanel({ conversation }: Props) {
         ) : leads && leads.length > 0 ? (
           <fieldset disabled={readonly}><InboxLeadEditor
             leads={leads}
-            stages={stages}
             selecionadoId={leadAtivoId}
             onSelecionar={setLeadAtivoId}
             onSalvo={recarregar}

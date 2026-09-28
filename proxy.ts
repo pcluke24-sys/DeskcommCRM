@@ -3,6 +3,8 @@ import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { authCookieOptions } from "@/lib/supabase/auth-cookie";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
+import { fetchDoServidor } from "@/lib/supabase/fetch-do-servidor";
+import { urlDoSupabaseNoServidor } from "@/lib/supabase/url-do-servidor";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import {
   verifyImpersonateCookieEdge,
@@ -49,9 +51,18 @@ export async function proxy(request: NextRequest) {
   }
 
   const supabase = createServerClient(
+    // #1082: base na URL pública, endereço interno só no transporte (ver
+    // `lib/supabase/fetch-do-servidor.ts`). O middleware não gera link, mas
+    // segue a mesma regra dos outros dois clients — um desenho só.
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      global: {
+        fetch: fetchDoServidor(
+          urlDoSupabaseNoServidor(env.SUPABASE_SERVER_URL, env.NEXT_PUBLIC_SUPABASE_URL),
+          env.NEXT_PUBLIC_SUPABASE_URL,
+        ),
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll();
