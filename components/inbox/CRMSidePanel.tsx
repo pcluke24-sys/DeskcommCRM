@@ -55,7 +55,6 @@ interface LeadRow {
   field_defs: CustomFieldDef[];
   funil_nome: string | null;
   etapa_nome: string | null;
-  stage_id?: string;
   /** As etapas ativas do funil, na ordem do quadro (rota crm-summary). */
   etapas_do_funil?: Array<{ id: string; name: string; is_won: boolean; is_lost: boolean }>;
 }
@@ -604,7 +603,6 @@ export function CRMSidePanel({ conversation }: Props) {
             enrichment?: (ProspectEnrichment & { collected_at: string }) | null;
             enrichment_error?: boolean;
             leads: LeadRow[];
-            stages?: StageRow[];
             orders: OrderRow[];
             activities: ActivityRow[];
             demandas: DemandaRow[];

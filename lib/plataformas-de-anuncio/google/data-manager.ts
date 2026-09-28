@@ -47,7 +47,7 @@ export function montarEvento(credencial: CredencialDeConversao, conversao: Conve
         eventSource: "MESSAGE",
         ...(clique ? { adIdentifiers: clique } : {}),
         ...(telefone ? { userData: { userIdentifiers: [{ phoneNumber: telefone }] } } : {}),
-        ...(conversao.valorCentavos !== null
+        ...(conversao.valorCentavos !== null && conversao.moeda !== null
           ? {
               conversionValue: conversao.valorCentavos / 100,
               currency: conversao.moeda.toUpperCase(),

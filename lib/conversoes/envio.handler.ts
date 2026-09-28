@@ -132,30 +132,38 @@ export async function processarConversao(
     stage_id: string;
   };
 
-  const { data: pipeline, error: pipelineError } = await admin
-    .from("crm_pipelines")
-    .select("settings")
-    .eq("id", lead.pipeline_id)
-    .eq("organization_id", row.organization_id)
-    .maybeSingle();
-  if (pipelineError) {
-    return {
-      consumer_key: CONSUMER_KEY,
-      status: "retry",
-      retry_at: new Date(Date.now() + ESPERA_PADRAO_MS).toISOString(),
-      detail: `leitura do funil falhou: ${pipelineError.message}`,
-    };
-  }
-
-  const config = configuracaoDoFunil((pipeline as { settings?: unknown } | null)?.settings);
   const payload =
     row.payload && typeof row.payload === "object" ? (row.payload as Record<string, unknown>) : {};
   const stageId = typeof payload.to_stage_id === "string" ? payload.to_stage_id : lead.stage_id;
-  const regra = config.regras[stageId];
   const ocorridoEm = new Date(row.created_at ?? Date.now());
+  let regra: RegraDeConversao | undefined;
+  let ativadaEm: Date | null = null;
+
+  // Regras por etapa só participam dos eventos que representam entrada/mudança
+  // de etapa. Reprocessar uma conversão já registrada e o `lead.won` legado não
+  // podem ganhar uma nova dependência de leitura nem trocar o nome do evento.
+  if (row.event_type === "lead.created" || row.event_type === "lead.stage_changed") {
+    const { data: pipeline, error: pipelineError } = await admin
+      .from("crm_pipelines")
+      .select("settings")
+      .eq("id", lead.pipeline_id)
+      .eq("organization_id", row.organization_id)
+      .maybeSingle();
+    if (pipelineError) {
+      return {
+        consumer_key: CONSUMER_KEY,
+        status: "retry",
+        retry_at: new Date(Date.now() + ESPERA_PADRAO_MS).toISOString(),
+        detail: `leitura do funil falhou: ${pipelineError.message}`,
+      };
+    }
+    const config = configuracaoDoFunil((pipeline as { settings?: unknown } | null)?.settings);
+    regra = config.regras[stageId];
+    ativadaEm = config.ativadaEm;
+  }
 
   // Mapeamentos novos nunca olham para eventos anteriores ao clique em salvar.
-  if (regra && config.ativadaEm && ocorridoEm < config.ativadaEm) {
+  if (regra && ativadaEm && ocorridoEm < ativadaEm) {
     return ok("skipped", "anterior_a_ativacao");
   }
 
@@ -163,7 +171,10 @@ export async function processarConversao(
   // em funis que ainda nao configuraram o novo mapa.
   const evento: NomeDoEvento | null = qualificacao
     ? EVENTO
-    : regra?.event_name ?? (lead.status === "won" ? EVENTO_DE_VENDA : null);
+    : regra?.event_name ??
+      (lead.status === "won" || row.event_type === "ad_conversion.retry_requested"
+        ? EVENTO_DE_VENDA
+        : null);
   if (!evento) return ok("skipped", "etapa_sem_evento");
 
   // O filtro que faz `lead.stage_changed` valer a pena escutar: a grande maioria

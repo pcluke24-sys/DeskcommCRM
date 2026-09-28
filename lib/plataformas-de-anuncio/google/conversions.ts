@@ -210,7 +210,9 @@ async function enviar(
       {
         ...(conversao.identificadoresGoogle || conversao.cliqueDeOrigem
           ? identificadorParaUpload(
-              conversao.identificadoresGoogle ?? { gclid: conversao.cliqueDeOrigem },
+              conversao.identificadoresGoogle ?? {
+                gclid: conversao.cliqueDeOrigem ?? undefined,
+              },
             )
           : {}),
         ...(telefone ? { userIdentifiers: [{ hashedPhoneNumber: telefone }] } : {}),

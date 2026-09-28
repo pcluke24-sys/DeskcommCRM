@@ -34,7 +34,10 @@ export interface AtribuicaoParaEnvio {
 
 export type LeituraDeAtribuicao =
   | { temAtribuicao: true; atribuicao: AtribuicaoParaEnvio }
-  | { temAtribuicao: false; motivo: "sem_contato" | "sem_telefone" | "plataforma_desconhecida" };
+  | {
+      temAtribuicao: false;
+      motivo: "sem_contato" | "sem_telefone" | "sem_atribuicao" | "plataforma_desconhecida";
+    };
 
 /**
  * ⚠️ FILTRA `organization_id` MESMO TENDO O ID DO CONTATO. O chamador é um

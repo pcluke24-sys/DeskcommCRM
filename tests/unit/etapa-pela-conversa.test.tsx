@@ -51,6 +51,7 @@ function bancoFalso(tabelas: Record<string, Linha[]>) {
     const chain = {
       select: (cols: string) => (selects.push(cols), chain),
       eq: (col: string, val: unknown) => ((linhas = linhas.filter((l) => valor(l, col) === val)), chain),
+      in: (col: string, vals: unknown[]) => ((linhas = linhas.filter((l) => vals.includes(valor(l, col)))), chain),
       is: (col: string, val: unknown) => ((linhas = linhas.filter((l) => (valor(l, col) ?? null) === val)), chain),
       not: (col: string, _op: string, val: unknown) => ((linhas = linhas.filter((l) => (valor(l, col) ?? null) !== val)), chain),
       order: () => chain,

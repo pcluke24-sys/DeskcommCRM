@@ -212,7 +212,9 @@ describe("o que vira pendência visível na tela", () => {
       }) as never,
     );
 
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response('{"events_received":1}', { status: 200 }));
     const r = await conversaoDeVendaHandler.handle(evento("lead.won"));
 
     expect(r.status).toBe("ok");
