@@ -66,6 +66,8 @@ import { FormularioDeCapturaDeUtm } from "./_formCapturaDeUtm";
 import { FormularioDeConversoes } from "./_form";
 import { EventosDoFunil, type FunilParaConversoes } from "./_funnel-events";
 import { FormularioDeConversoesGoogle } from "./_formGoogle";
+import { VendaPeloCanal } from "./_vendaPeloCanal";
+import { vendaPeloCanalLigada } from "@/lib/conversoes/venda-pelo-canal";
 import { RegrasDeConversaoGoogle, type EtapaAberta } from "./_regrasGoogle";
 import { listarRegrasGoogle } from "@/lib/conversoes/regras-google";
 
@@ -135,7 +137,7 @@ export default async function ConversoesPage({
     // aqui não pode derrubar a tela inteira: sem sugestão, a pessoa digita.
     listSelectableChannels(admin, activeOrg.orgId).catch(() => []),
     // O `slug` é o `[org]` da rota pública, e não está no `ActiveOrg`.
-    admin.from("organizations").select("slug").eq("id", activeOrg.orgId).maybeSingle(),
+    admin.from("organizations").select("slug, settings").eq("id", activeOrg.orgId).maybeSingle(),
     lerEstadoDaCaptura(admin, "google_ads_landing_pages", activeOrg.orgId),
     admin
       .from("crm_stages")
@@ -147,7 +149,8 @@ export default async function ConversoesPage({
     // Falha na leitura das regras não derruba a tela: o editor some e o resto fica.
     listarRegrasGoogle(admin, activeOrg.orgId).catch(() => null),
   ]);
-  const slug = (organizacao.data as { slug: string | null } | null)?.slug ?? null;
+  const linhaDaOrganizacao = organizacao.data as { slug: string | null; settings?: unknown } | null;
+  const slug = linhaDaOrganizacao?.slug ?? null;
   // Etapas abertas agrupadas por funil, na ordem do funil; a primeira de cada
   // funil é onde o lead nasce (a sugestão "Novo lead" do recomendado).
   const vistosOsFunis = new Set<string>();
@@ -338,6 +341,10 @@ export default async function ConversoesPage({
           )}
 
           <FormularioDeConversoes estado={estado} idioma={idioma} />
+          <VendaPeloCanal
+            ligada={vendaPeloCanalLigada(linhaDaOrganizacao?.settings)}
+            idioma={idioma}
+          />
           <FormularioDeConversoesGoogle
             estado={estadoGoogle}
             idioma={idioma}
