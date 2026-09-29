@@ -152,7 +152,7 @@ const admin = {
   async rpc(nome: string, args: Record<string, unknown>) {
     rpcChamadas.push({ nome, args });
     ultimaRpc = args;
-    sequencia.push(`rpc:${args.p_event_type ?? nome}`);
+    sequencia.push(`rpc:${nome === "fn_garantir_despacho_agente" ? "ai_agent.dispatch_requested" : (args.p_event_type ?? nome)}`);
     return { error: rpcErro };
   },
 } as never;
@@ -322,17 +322,13 @@ describe("despacho do agente", () => {
     // O consumidor é UM só. Um payload por canal faria o worker adivinhar de
     // quem veio.
     await rodar();
-    expect(ultimaRpc).toMatchObject({
-      p_event_type: "ai_agent.dispatch_requested",
-      p_entity_kind: "message",
-      p_entity_id: "msg-1",
+    expect(rpcChamadas.at(-1)).toMatchObject({
+      nome: "fn_garantir_despacho_agente",
+      args: {
       p_organization_id: "org-1",
-      p_payload: {
-        organization_id: "org-1",
-        conversation_id: "conversa-1",
-        contact_id: "contato-1",
-        channel_session_id: "sessao-1",
-        inbound_message_id: "msg-1",
+        p_message_id: "msg-1",
+        p_source: "canal_de_teste",
+        p_request_id: "req-1",
       },
     });
   });
@@ -344,9 +340,12 @@ describe("despacho do agente", () => {
     expect(sequencia).not.toContain("rpc:ai_agent.dispatch_requested");
   });
 
-  it("falha do emit não derruba a ingestão", async () => {
+  it("falha transitória ao garantir despacho pede reentrega em vez de perder a resposta", async () => {
     rpcErro = { message: "rpc fora do ar" };
-    await expect(rodar()).resolves.toBeUndefined();
+    await expect(rodar()).rejects.toMatchObject({
+      name: "FalhaTransitoriaDeIngestao",
+      etapa: "fn_garantir_despacho_agente",
+    });
   });
 });
 
