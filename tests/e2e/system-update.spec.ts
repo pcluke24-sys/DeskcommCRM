@@ -337,11 +337,18 @@ test("o dono vê a versão nova na sidebar e atualiza pela tela", async ({ page,
   await expect(page.getByRole("button", { name: /atualizar agora/i })).toHaveCount(0);
   await page.screenshot({ path: "evidence/task9-3a-acabou-de-atualizar.png" });
 
-  // E quando o host finalmente confirma, a janela se fecha sozinha: volta o
-  // texto normal de quem está em dia, sem ninguém limpar estado nenhum.
+  // E quando o host finalmente confirma, a janela do pedido se fecha sozinha.
+  // Se entretanto existir uma release oficial mais nova que a edição
+  // personalizada, o dono vê o aviso oficial (sem botão de instalar); caso
+  // contrário, vê o texto normal de quem está em dia.
   await heartbeat(request, { current_version: "1.1.0", latest_version: "1.1.0" });
   await page.reload();
-  await expect(page.getByRole("heading", { name: /^você está na versão 1\.1\.0/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: /^(você está na versão 1\.1\.0|nova versão oficial \d+\.\d+\.\d+)/i,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /atualizar agora/i })).toHaveCount(0);
   await page.screenshot({ path: "evidence/task9-3b-em-dia.png" });
 });
 
