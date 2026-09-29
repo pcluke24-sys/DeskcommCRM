@@ -228,6 +228,16 @@ describe("identificador preservado do WhatsApp ao envio", () => {
         plataforma: "google_ads",
         cliqueDeOrigem: "clique-braid",
         telefone: null,
+        identidade: {
+          nome: undefined,
+          sobrenome: undefined,
+          email: undefined,
+          ipDoContato: undefined,
+          agenteDoNavegadorDoContato: undefined,
+          identificadorDoNavegador: undefined,
+          identificadorDeCliqueWeb: undefined,
+          identificadorExterno: `${ORG}:${CONTATO}`,
+        },
         identificadoresGoogle: { [tipo]: "clique-braid" },
       },
     });

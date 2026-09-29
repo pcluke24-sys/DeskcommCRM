@@ -20,6 +20,10 @@ vi.mock("@/hooks/inbox/useMessageTemplates", () => ({
 vi.mock("@/hooks/inbox/useDraftReply", () => ({
   useDraftReply: () => ({ mutate: vi.fn(), isPending: false }),
 }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
+  useAuth: () => ({ activeOrg: { ai_module_enabled: true } }),
+}));
 vi.mock("@/lib/api/client", () => ({
   apiClient: { post: (...args: unknown[]) => postMock(...args) as Promise<unknown> },
 }));

@@ -33,6 +33,8 @@ _I18N_TABELA=0
 if [ $((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1])) -ge "${I18N_BASH_MINIMO:-404}" ]; then
 _I18N_TABELA=1
 declare -A _ES=(
+  ["  Se as imagens não estiverem acessíveis, elas serão construídas neste servidor."]="  Si las imágenes no están disponibles, se construirán en este servidor."
+  ["  Esse fallback leva alguns minutos a mais, mas não interrompe a instalação."]="  Esta alternativa tarda unos minutos más, pero no interrumpe la instalación."
   ["Este servidor usa arquitetura '{1}', mas as imagens publicadas do DeskcommCRM hoje são linux/amd64."]="Este servidor usa arquitectura '{1}', pero las imágenes publicadas de DeskcommCRM hoy son linux/amd64."
   ["  Use uma VPS x86_64/amd64. Repetir o download não resolve; ARM64 só será suportado quando houver imagens multi-arquitetura."]="  Usa una VPS x86_64/amd64. Repetir la descarga no soluciona nada; ARM64 solo se admitirá cuando existan imágenes multiarquitectura."
   ["Este servidor usa arquitetura '{1}', e as imagens publicadas do DeskcommCRM são só linux/amd64."]="Este servidor usa arquitectura '{1}', y las imágenes publicadas de DeskcommCRM son solo linux/amd64."
