@@ -72,6 +72,11 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 #   2. a descoberta de repositório nunca sobe para fora de "$TMP";
 #   3. identidade por ambiente, não por `git config` (NENHUM teste aqui mede o autor).
 unset $(git rev-parse --local-env-vars)
+# A suíte constrói PRs fictícios (inclusive o #7) em repositórios descartáveis.
+# No GitHub Actions, GITHUB_REF nomeia o PR REAL em execução; quando ele também
+# é o #7, o gate confunde o fixture com "o próprio PR" e o exclui da medição.
+# Nada nesta suíte deve herdar a identidade do workflow hospedeiro.
+unset GITHUB_REF
 export GIT_CEILING_DIRECTORIES="$TMP"
 export GIT_AUTHOR_NAME="Teste" GIT_AUTHOR_EMAIL="teste@exemplo.invalid"
 export GIT_COMMITTER_NAME="Teste" GIT_COMMITTER_EMAIL="teste@exemplo.invalid"

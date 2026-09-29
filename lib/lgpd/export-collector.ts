@@ -176,6 +176,36 @@ export interface SaleRow {
 }
 
 /**
+ * Proposta comercial SOBRE a pessoa.
+ *
+ * A migration 0477 liga `destinatario_nome`, `briefing_json` e
+ * `resumo_comercial` à cascata de anonimização, e este bloco é a outra
+ * metade — o que se apaga a pedido do titular é o que se entrega a pedido
+ * dele.
+ */
+export interface ProposalRow {
+  id: string;
+  numero: number | null;
+  ano: number | null;
+  titulo: string;
+  status: string;
+  total_cents: number;
+  moeda: string;
+  valid_until: string | null;
+  sent_at: string | null;
+  decided_at: string | null;
+  destinatario_nome: string | null;
+  resumo_comercial: string | null;
+  /**
+   * Houve um PDF gerado e enviado. O ARQUIVO não vai no pacote — mesma regra
+   * de `has_media` das mensagens: o titular o recebeu no WhatsApp, e a
+   * anonimização o expurga do Storage (0477). O caminho interno não sai.
+   */
+  tem_pdf: boolean;
+  created_at: string;
+}
+
+/**
  * Tarefa combinada SOBRE a pessoa (migration 0210).
  *
  * ⚠️ ESTE BLOCO NASCEU COM A OUTRA METADE, e não depois dela. A migration liga o
@@ -476,6 +506,7 @@ export interface ExportPayload {
   checkpoints: CheckpointRow[];
   appointments: AppointmentRow[];
   sales: SaleRow[];
+  proposals: ProposalRow[];
   tasks: TaskRow[];
   webhook_captures: CaptureRow[];
   audit_log_extract: AuditRow[];
@@ -539,6 +570,29 @@ export interface ExportPayload {
    * se entrega a pedido dele (Art. 18 II).
    */
   campaign_suppressions: CampaignSuppressionRow[];
+  /** Rascunhos escritos PARA o titular por outro sistema (0419), apagados na
+   *  anonimização. Opcional como `reply_drafts`: o tipo é montado à mão nos testes de PDF. */
+  conversation_drafts?: Array<{
+    id: string;
+    conversation_id: string;
+    body: string;
+    source: string;
+    consumed_at: string | null;
+    created_at: string;
+  }>;
+  /** Propostas de campo do contato (0123), também APAGADAS na anonimização. */
+  contact_field_proposals?: Array<{
+    id: string;
+    campo: string;
+    valor_proposto: string;
+    valor_anterior: string | null;
+    conversation_id: string | null;
+    trecho: string | null;
+    status: string;
+    proposed_at: string;
+    decided_at: string | null;
+    motivo_recusa: string | null;
+  }>;
   reply_drafts?: Array<{
     id: string;
     status: string;
@@ -988,6 +1042,31 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
+  // Propostas comerciais — contact_id direto em crm_proposals. A 0477
+  // acrescentou destinatario_nome/briefing_json/resumo_comercial à cascata de
+  // redação; este bloco é a outra metade — sem ele, o titular pediria acesso
+  // e receberia um relatório que não menciona nenhuma proposta que recebeu.
+  let proposals: ProposalRow[] = [];
+  if (contactId) {
+    const { data, error } = await admin
+      .from("crm_proposals")
+      .select(
+        "id, numero, ano, titulo, status, total_cents, moeda, valid_until, sent_at, decided_at, destinatario_nome, resumo_comercial, pdf_path, created_at",
+      )
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      logger.warn("[lgpd-export-worker] proposals load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      proposals = data.map(({ pdf_path, ...p }) => ({ ...p, tem_pdf: Boolean(pdf_path) }));
+    }
+  }
+
   // Tarefas — contact_id direto em crm_tasks (migration 0210).
   //
   // O texto que a equipe escreveu sobre o titular ("ligar para Fulano confirmar
@@ -1102,6 +1181,32 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
+  // Propostas de campo do contato: a anonimização as APAGA, e o valor proposto é
+  // dado do titular. Mesmo escopo da função que apaga, com os ids internos fora.
+  //
+  // POR PÁGINA, não por teto: esta fila a IA alimenta enquanto a conversa dura, e
+  // um `limit` faria as mais antigas sumirem do relatório sem ninguém saber. A
+  // chave é `id` (única) — ordenar por `proposed_at` deixaria empates decidirem a
+  // página. Mesma forma do bloco dos rascunhos, logo acima.
+  const contact_field_proposals: NonNullable<ExportPayload["contact_field_proposals"]> = [];
+  if (contactId) {
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await admin
+        .from("contact_field_proposals")
+        .select(
+          "id, campo, valor_proposto, valor_anterior, conversation_id, trecho, status, proposed_at, decided_at, motivo_recusa",
+        )
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contactId)
+        .order("id")
+        .range(offset, offset + 499);
+      // Uma falha não pode virar um relatório que diz que não guardamos dados.
+      if (error) throw error;
+      contact_field_proposals.push(...(data ?? []));
+      if (!data || data.length < 500) break;
+    }
+  }
+
   // Audit log extract (best-effort: rows where metadata.contact_id matches).
   let audit_log_extract: AuditRow[] = [];
   if (contactId) {
@@ -1181,6 +1286,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   const case_chat_messages: CaseChatMessageRow[] = [];
   const passagens: PassagemDeAtendimentoRow[] = [];
   const avisos_de_caso: AvisoDeCasoEntregaRow[] = [];
+  const conversation_drafts: NonNullable<ExportPayload["conversation_drafts"]> = [];
   if (contactId) {
     const pageSize = 500;
     const refBatchSize = 100; // Mantém o filtro IN abaixo dos limites de URL dos proxies.
@@ -1313,6 +1419,23 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       }
       passagens.push(...(pagina ?? []));
       if (!pagina || pagina.length < pageSize) break;
+    }
+    // Os rascunhos das conversas do titular — o MESMO escopo que a função de
+    // anonimização usa, a partir dos ids já paginados acima: sem FK para
+    // `contacts`, nenhuma outra leitura alcançaria a tabela.
+    for (let batch = 0; batch < conversationIds.length; batch += refBatchSize) {
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await admin
+          .from("conversation_drafts")
+          .select("id, conversation_id, body, source, consumed_at, created_at")
+          .eq("organization_id", organizationId)
+          .in("conversation_id", conversationIds.slice(batch, batch + refBatchSize))
+          .order("id")
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        conversation_drafts.push(...(data ?? []));
+        if (!data || data.length < pageSize) break;
+      }
     }
     // O registro de entrega do aviso ao suporte (migration 0292). O escopo sai
     // dos CASOS já coletados, e não de uma segunda derivação pela conversa: um
@@ -1458,6 +1581,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     checkpoints,
     appointments,
     sales,
+    proposals,
     tasks,
     webhook_captures,
     audit_log_extract,
@@ -1474,6 +1598,8 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     avisos_de_caso,
     campaign_recipients,
     campaign_suppressions,
+    conversation_drafts,
+    contact_field_proposals,
   };
 }
 
@@ -1503,6 +1629,7 @@ function emptyPayload(
     checkpoints: [],
     appointments: [],
     sales: [],
+    proposals: [],
     tasks: [],
     webhook_captures: [],
     audit_log_extract: [],

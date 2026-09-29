@@ -55,13 +55,13 @@ describe("transporte Meta", () => {
       {
         organizationId: "org-2",
         leadId: "lead-2",
-        evento: "Contact",
-        eventoId: "lead-2:Contact",
+        evento: "Purchase",
+        eventoId: "lead-2:Purchase",
         ocorridoEm: new Date(),
         cliqueDeOrigem: "ctwa-real",
         telefone: "5511999999999",
-        valorCentavos: null,
-        moeda: null,
+        valorCentavos: 10000,
+        moeda: "BRL",
         identidade: {
           identificadorExterno: "org-2:contact-1",
           email: "invalido",
@@ -80,11 +80,11 @@ describe("transporte Meta", () => {
     });
     expect(user.external_id[0]).not.toBe(INTERNOS.hash("org-1:contact-1"));
   });
-  it("nao inventa valor para evento que nao e compra", async () => {
+  it("rejeita evento que nao e compra sem chamar a Meta", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await transporteMeta.enviar(
+    const resultado = await transporteMeta.enviar(
       { datasetId: "123456", accessToken: "token-secreto", testEventCode: "TEST1" },
       {
         organizationId: "org-1",
@@ -99,14 +99,11 @@ describe("transporte Meta", () => {
       },
     );
 
-    const init = fetchMock.mock.calls[0]![1] as RequestInit;
-    const corpo = JSON.parse(String(init.body));
-    expect(corpo.data[0].event_name).toBe("Contact");
-    expect(corpo.data[0].action_source).toBe("business_messaging");
-    expect(corpo.data[0].messaging_channel).toBe("whatsapp");
-    expect(corpo.data[0].user_data.ctwa_clid).toBe("ctwa-1");
-    expect(corpo.data[0]).not.toHaveProperty("custom_data");
-    expect(corpo.test_event_code).toBe("TEST1");
+    expect(resultado).toEqual({
+      tipo: "permanente",
+      detalhe: "Este transporte aceita apenas compras com valor.",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("converte centavos em numero decimal para Purchase", async () => {
@@ -142,13 +139,13 @@ describe("transporte Meta", () => {
       {
         organizationId: "org-1",
         leadId: "lead-organico",
-        evento: "Contact",
-        eventoId: "lead-organico:Contact",
+        evento: "Purchase",
+        eventoId: "lead-organico:Purchase",
         ocorridoEm: new Date(),
         cliqueDeOrigem: null,
         telefone: "5511999999999",
-        valorCentavos: null,
-        moeda: null,
+        valorCentavos: 10000,
+        moeda: "BRL",
       },
     );
 

@@ -224,6 +224,17 @@ describe("a rodada de e2e avisa antes de estourar o teto de 30 min", () => {
     ).toMatch(/[Nn]enhum caso vermelho/);
   });
 
+  it("corte sem caso vermelho é continuação neutra, não falha de código", () => {
+    const corte = COMANDOS.join("\n");
+    expect(corte, "o corte limpo não fica visível como continuação").toMatch(/CORTE_NEUTRO=sim/);
+    expect(corte, "o corte limpo ainda devolve o código 124/137").toMatch(
+      /Nenhum caso vermelho[\s\S]*CODIGO=0/,
+    );
+    expect(corte, "o corte limpo ainda é publicado como erro").not.toMatch(
+      /::error[^\n]*Nenhum caso vermelho/,
+    );
+  });
+
   // `test.fail(...)` é falha ESPERADA e sai com o MESMO `✘` (medido no run
   // 35388254053: `degradacao-silenciosa.spec.ts` imprime ✘ e o job fecha
   // "150 passed"). Contá-la inverteria o erro — inventaria um vermelho.

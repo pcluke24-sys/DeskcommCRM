@@ -66,6 +66,14 @@ export async function updatePipelineConfig(
   if (parsed.data.qualification_policy !== undefined) {
     nextSettings.qualification_policy = parsed.data.qualification_policy;
   }
+  if (parsed.data.won_reasons !== undefined) nextSettings.won_reasons = parsed.data.won_reasons;
+  if (parsed.data.won_reason_required !== undefined) {
+    nextSettings.won_reason_required = parsed.data.won_reason_required;
+  }
+  if (parsed.data.reabertura !== undefined) nextSettings.reabertura = parsed.data.reabertura;
+  if (parsed.data.reabertura_campos !== undefined) {
+    nextSettings.reabertura_campos = parsed.data.reabertura_campos;
+  }
 
   const { error } = await supabase
     .from("crm_pipelines")
@@ -89,6 +97,9 @@ export async function updatePipelineConfig(
           ? null
           : Object.keys(parsed.data.meta_conversion_rules).length,
       qualification_policy_changed: parsed.data.qualification_policy !== undefined,
+      won_reasons_count: parsed.data.won_reasons?.length ?? null,
+      won_reason_required: parsed.data.won_reason_required ?? null,
+      reabertura: parsed.data.reabertura ?? null,
     },
   });
 

@@ -1,3 +1,5 @@
+import type { IdentificadoresGoogle } from "./google/identificadores";
+
 /**
  * O vocabulário AGNÓSTICO do eixo de plataformas de anúncio.
  *
@@ -42,6 +44,8 @@
  * REPORTAR. Os dois conjuntos coincidem hoje e não têm por que coincidir sempre
  * — existe plataforma que atribui e não recebe conversão de volta.
  */
+export type ApiDeConversaoGoogle = "google_ads" | "data_manager";
+
 export type PlataformaDeAnuncio = "meta_ads" | "google_ads";
 
 /** Nome padrao ou personalizado aceito pela plataforma (validado na configuracao). */
@@ -86,6 +90,7 @@ export interface ConversaoOffline {
   ocorridoEm: Date;
   /** O clique que originou a conversa, quando houver — `ad_source_id` do contato (0164). */
   cliqueDeOrigem: string | null;
+  identificadoresGoogle?: IdentificadoresGoogle;
   /** E.164 sem `+`, ainda EM CLARO: o hash é responsabilidade do transporte. */
   telefone: string | null;
   identidade?: IdentidadeParaCorrespondencia;
@@ -112,8 +117,9 @@ export interface ConversaoOffline {
  */
 export type ResultadoDeEnvio =
   | { tipo: "ok"; detalhe?: string }
+  | { tipo: "processando"; protocolo: string; detalhe: string }
   | { tipo: "transitorio"; detalhe: string; tentarEmMs?: number }
-  | { tipo: "permanente"; detalhe: string };
+  | { tipo: "permanente"; detalhe: string; rejeicaoConfirmada?: boolean };
 
 /**
  * As credenciais que o transporte precisa, já decifradas.
@@ -132,18 +138,24 @@ export interface CredencialDeConversao {
   /** Preenchido = envio marcado como teste, não conta para otimização. */
   testEventCode: string | null;
   google?: {
+    api?: ApiDeConversaoGoogle;
     /** Decifrado; NUNCA o access token — esse é derivado a cada envio. */
     refreshToken: string;
     customerId: string;
     /** `null` = acesso direto, sem conta de gerente (MCC). */
     loginCustomerId: string | null;
     conversionActionId: string;
+    /** Negócio ganho sem valor (0436). Ausente = `obrigatorio`, o comportamento de sempre. */
+    modoDeValorDaVenda?: "obrigatorio" | "quando_houver" | "nunca";
+    /** Envia o telefone em SHA-256 (E.164) junto da conversão (0436). */
+    enviarTelefone?: boolean;
   };
 }
 
 /** O contrato que todo transporte de conversão cumpre. */
 export interface TransporteDeConversao {
   plataforma: PlataformaDeAnuncio;
+  consultar?(credencial: CredencialDeConversao, protocolo: string): Promise<ResultadoDeEnvio>;
   enviar(credencial: CredencialDeConversao, conversao: ConversaoOffline): Promise<ResultadoDeEnvio>;
 }
 

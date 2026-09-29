@@ -2,6 +2,7 @@ import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { redirect } from "next/navigation";
 import { loadOnboardingState } from "@/app/actions/onboarding/_shared";
 import { resumoDoOnboarding } from "@/lib/onboarding/passos";
+import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { oQueMaisExiste } from "@/lib/onboarding/o-que-mais-existe";
 import { DoneClient } from "./_client";
@@ -24,5 +25,21 @@ export default async function DonePage() {
     iaLiberada: aiModuleEnabled,
   });
 
-  return <DoneClient itens={itens} pecas={aiModuleEnabled ? oQueMaisExiste() : []} />;
+  const supabase = await createClient();
+  // SE O ATENDENTE ESTÁ NO AR vem do banco, não das pendências: publicar é o
+  // que coloca o agente de pé, e a tela antiga inferia isso (mal) só de
+  // "ficou algo por fazer" — daí "Seu funcionário já está de pé" dito para quem
+  // pulou a IA e para quem ficou com o rascunho.
+  const { data: publicados } = await supabase
+    .from("ai_agents")
+    .select("id")
+    .eq("organization_id", activeOrg.orgId)
+    .is("archived_at", null)
+    .not("published_version_id", "is", null)
+    .limit(1);
+  const noAr = (publicados ?? []).length > 0;
+
+  return (
+    <DoneClient itens={itens} pecas={aiModuleEnabled ? oQueMaisExiste() : []} noAr={noAr} />
+  );
 }

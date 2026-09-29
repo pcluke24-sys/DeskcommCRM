@@ -225,7 +225,7 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
     categoria: "PROTOCOLO",
     motivo:
       "é a guarda do contrato acima: este teste é o que reprova quem renomear o header. Trocar a string aqui para 'limpar a marca' desarmaria a única proteção que o contrato tem",
-    marcas: ["x-deskcomm-event", "x-deskcomm-signature", "x-deskcomm-signature"],
+    marcas: ["x-deskcomm-event", "x-deskcomm-signature", "x-deskcomm-signature", "x-deskcomm-signature"],
   },
   "lib/mcp/server.ts": {
     categoria: "PROTOCOLO",
@@ -320,6 +320,13 @@ const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
     motivo:
       "fixture que reproduz o CHANGELOG real, incluindo as URLs do repositório no GitHub. A marca aqui é o nome do repositório upstream, que o clone não renomeia",
     marcas: ["deskcommcrm", "deskcommcrm", "deskcommcrm"],
+  },
+
+  "lib/system/official-release.ts": {
+    categoria: "PROTOCOLO",
+    motivo:
+      "identificador do repositório upstream consultado para avisar o operador da organização principal sobre releases oficiais. Não é marca de interface: trocar pelo nome do revendedor faria o aviso consultar o fork e deixaria de detectar novidades do projeto de origem",
+    marcas: ["deskcommcrm"],
   },
 
   // ─── PADRAO — a marca padrão precisa existir em algum lugar. ───
@@ -804,6 +811,10 @@ type CategoriaDeHost =
 type EntradaDeHost = { categoria: CategoriaDeHost; motivo: string };
 
 const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
+  "datamanager.googleapis.com": {
+    categoria: "FORNECEDOR",
+    motivo: "endpoint oficial da Google Data Manager API: recebe conversões e consulta o processamento na conta autorizada pela própria organização. O destino pertence ao fornecedor e não à instalação do CRM.",
+  },
   // ── localização compartilhada: o link que abre o pino do cliente ──
   "maps.google.com": {
     categoria: "PLATAFORMA",
@@ -827,6 +838,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     categoria: "FORNECEDOR",
     motivo:
       "endpoint da API da OpenAI (embeddings da busca e transcrição de áudio). É o destino do request: trocar pelo domínio do revendedor faria a chamada não chegar a lugar nenhum.",
+  },
+  "api.github.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint da API do GitHub consultado por `lib/system/official-release.ts` para descobrir a release oficial mais recente. A consulta é somente informativa e restrita à organização principal; trocar o host impediria detectar novas versões upstream.",
   },
   "api.typesafe.ai": {
     categoria: "FORNECEDOR",
