@@ -26,7 +26,6 @@ import {
 import { agenteAceitaComandoDeCelular, lerComandoDeControle } from "@/lib/escalacao/comando-de-canal";
 import { devolverAtendimentoAoAgente } from "@/lib/escalacao/retomada";
 import { getWahaClient } from "@/lib/waha/client";
-import { acelerarPipelineDeEventos } from "@/lib/dev/kick-local-pipeline";
 import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { estamparAtribuicaoDoContato } from "@/lib/leads/atribuicao-de-anuncio";
 import { extrairEEstamparAtribuicaoGoogle } from "@/lib/plataformas-de-anuncio/google/atribuicao";
@@ -588,10 +587,16 @@ async function mensagemIngeridaPorExternalId(
   admin: Admin,
   orgId: string,
   externalId: string,
-): Promise<{ id: string; contact_id: string; body: string | null } | null> {
+): Promise<{
+  id: string;
+  contact_id: string;
+  conversation_id: string;
+  channel_session_id: string;
+  body: string | null;
+} | null> {
   const { data, error } = await admin
     .from("messages")
-    .select("id, contact_id, body")
+    .select("id, contact_id, conversation_id, channel_session_id, body")
     .eq("organization_id", orgId)
     .eq("external_id", externalId)
     .eq("direction", "inbound")
@@ -713,25 +718,22 @@ async function handleInbound(
       external_id: p.id,
       direcao: "inbound",
     });
-    // A 1ª entrega pode ter gravado a mensagem e estourado o tempo ANTES de
-    // `aplicarEfeitosPosEntrada` — a reentrega cai aqui. Reacelerar só o
-    // pipeline (sem re-despachar o agente) destrava o match_reply.
+    // A 1ª entrega pode ter gravado a mensagem e falhado ANTES de garantir o
+    // despacho. A reentrega precisa refazer os efeitos idempotentes, inclusive
+    // o despacho; só reacelerar follow-up deixa a resposta imediata perdida.
     const existente = await mensagemIngeridaPorExternalId(admin, session.organization_id, p.id);
     if (existente) {
-      try {
-        await acelerarPipelineDeEventos(admin, {
-          organizationId: session.organization_id,
-          contactId: existente.contact_id,
-          messageId: existente.id,
-          texto: existente.body,
-        });
-      } catch (err) {
-        logger.warn("waha.ingest: dedup nao reacelerou pipeline", {
-          organization_id: session.organization_id,
-          external_id: p.id,
-          detail: err instanceof Error ? err.message : String(err),
-        });
-      }
+      await aplicarEfeitosPosEntrada(admin, {
+        organizationId: session.organization_id,
+        contactId: existente.contact_id,
+        conversationId: existente.conversation_id,
+        messageId: existente.id,
+        channelSessionId: existente.channel_session_id,
+        texto: existente.body,
+        nomeDoContato: notifyNameOf(p),
+        requestId,
+        origem: "waha_webhook_reentrega",
+      });
     }
     return;
   }

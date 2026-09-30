@@ -39,6 +39,11 @@ import { ensureHandlersRegistered } from "@/lib/event-log/register-handlers";
 
 const RAIZES = ["app", "lib", "workers"];
 const EMISSAO = /p_event_type:\s*"([a-z0-9_.]+)"/g;
+const EMISSOES_ENCAPSULADAS: ReadonlyArray<{ chamada: RegExp; evento: string }> = [
+  // O helper SQL garante idempotência e deriva o payload da própria mensagem;
+  // por isso o tipo não viaja mais como argumento aberto do TypeScript.
+  { chamada: /rpc\("fn_garantir_despacho_agente"/, evento: "ai_agent.dispatch_requested" },
+];
 
 /**
  * Consumidores que NÃO são handlers do `event_log` — o registry não os conhece,
@@ -82,7 +87,11 @@ function arquivos(dir: string): string[] {
 function tiposEmitidos(): string[] {
   const achados = new Set<string>();
   for (const f of RAIZES.flatMap(arquivos)) {
-    for (const m of readFileSync(f, "utf8").matchAll(EMISSAO)) achados.add(m[1]!);
+    const fonte = readFileSync(f, "utf8");
+    for (const m of fonte.matchAll(EMISSAO)) achados.add(m[1]!);
+    for (const encapsulada of EMISSOES_ENCAPSULADAS) {
+      if (encapsulada.chamada.test(fonte)) achados.add(encapsulada.evento);
+    }
   }
   return [...achados].sort();
 }

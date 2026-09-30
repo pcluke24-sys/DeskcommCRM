@@ -48,6 +48,8 @@ vi.mock("@/lib/dev/kick-local-pipeline", () => ({
 let sequencia: string[] = [];
 let updateErro: { message: string } | null = null;
 let rpcErro: { message: string } | null = null;
+/** Quando preenchido, a falha pertence só à RPC indicada. */
+let rpcErroNome: string | null = null;
 /**
  * O histórico de ENTRADA de quem escreveu, do ponto de vista da guarda de
  * "primeira mensagem". O padrão é o caso honesto e mais comum: a mensagem que
@@ -152,8 +154,8 @@ const admin = {
   async rpc(nome: string, args: Record<string, unknown>) {
     rpcChamadas.push({ nome, args });
     ultimaRpc = args;
-    sequencia.push(`rpc:${args.p_event_type ?? nome}`);
-    return { error: rpcErro };
+    sequencia.push(`rpc:${nome === "fn_garantir_despacho_agente" ? "ai_agent.dispatch_requested" : (args.p_event_type ?? nome)}`);
+    return { error: rpcErro && (!rpcErroNome || rpcErroNome === nome) ? rpcErro : null };
   },
 } as never;
 
@@ -178,6 +180,7 @@ beforeEach(() => {
   sequencia = [];
   updateErro = null;
   rpcErro = null;
+  rpcErroNome = null;
   historicoDoContato = { id: "msg-1", count: 1 };
   historicoErro = null;
   ultimoUpdate = null;
@@ -322,17 +325,13 @@ describe("despacho do agente", () => {
     // O consumidor é UM só. Um payload por canal faria o worker adivinhar de
     // quem veio.
     await rodar();
-    expect(ultimaRpc).toMatchObject({
-      p_event_type: "ai_agent.dispatch_requested",
-      p_entity_kind: "message",
-      p_entity_id: "msg-1",
+    expect(rpcChamadas.at(-1)).toMatchObject({
+      nome: "fn_garantir_despacho_agente",
+      args: {
       p_organization_id: "org-1",
-      p_payload: {
-        organization_id: "org-1",
-        conversation_id: "conversa-1",
-        contact_id: "contato-1",
-        channel_session_id: "sessao-1",
-        inbound_message_id: "msg-1",
+        p_message_id: "msg-1",
+        p_source: "canal_de_teste",
+        p_request_id: "req-1",
       },
     });
   });
@@ -344,9 +343,13 @@ describe("despacho do agente", () => {
     expect(sequencia).not.toContain("rpc:ai_agent.dispatch_requested");
   });
 
-  it("falha do emit não derruba a ingestão", async () => {
+  it("falha transitória ao garantir despacho pede reentrega em vez de perder a resposta", async () => {
     rpcErro = { message: "rpc fora do ar" };
-    await expect(rodar()).resolves.toBeUndefined();
+    rpcErroNome = "fn_garantir_despacho_agente";
+    await expect(rodar()).rejects.toMatchObject({
+      name: "FalhaTransitoriaDeIngestao",
+      etapa: "fn_garantir_despacho_agente",
+    });
   });
 });
 
@@ -521,6 +524,7 @@ describe("a origem da página que veio no texto", () => {
 
   it("se o banco recusar a estampagem, os outros efeitos seguem", async () => {
     rpcErro = { message: "permission denied" };
+    rpcErroNome = "fn_estampar_atribuicao_de_anuncio";
     await rodar({ texto: `oi ${CODIGO}` });
     expect(nomesDeRpc()).toContain("fn_estampar_atribuicao_de_anuncio");
     expect(garantirLeadDaConversa).toHaveBeenCalled();
