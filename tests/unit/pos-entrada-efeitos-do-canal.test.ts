@@ -48,6 +48,8 @@ vi.mock("@/lib/dev/kick-local-pipeline", () => ({
 let sequencia: string[] = [];
 let updateErro: { message: string } | null = null;
 let rpcErro: { message: string } | null = null;
+/** Quando preenchido, a falha pertence só à RPC indicada. */
+let rpcErroNome: string | null = null;
 /**
  * O histórico de ENTRADA de quem escreveu, do ponto de vista da guarda de
  * "primeira mensagem". O padrão é o caso honesto e mais comum: a mensagem que
@@ -153,7 +155,7 @@ const admin = {
     rpcChamadas.push({ nome, args });
     ultimaRpc = args;
     sequencia.push(`rpc:${nome === "fn_garantir_despacho_agente" ? "ai_agent.dispatch_requested" : (args.p_event_type ?? nome)}`);
-    return { error: rpcErro };
+    return { error: rpcErro && (!rpcErroNome || rpcErroNome === nome) ? rpcErro : null };
   },
 } as never;
 
@@ -178,6 +180,7 @@ beforeEach(() => {
   sequencia = [];
   updateErro = null;
   rpcErro = null;
+  rpcErroNome = null;
   historicoDoContato = { id: "msg-1", count: 1 };
   historicoErro = null;
   ultimoUpdate = null;
@@ -342,6 +345,7 @@ describe("despacho do agente", () => {
 
   it("falha transitória ao garantir despacho pede reentrega em vez de perder a resposta", async () => {
     rpcErro = { message: "rpc fora do ar" };
+    rpcErroNome = "fn_garantir_despacho_agente";
     await expect(rodar()).rejects.toMatchObject({
       name: "FalhaTransitoriaDeIngestao",
       etapa: "fn_garantir_despacho_agente",
@@ -520,6 +524,7 @@ describe("a origem da página que veio no texto", () => {
 
   it("se o banco recusar a estampagem, os outros efeitos seguem", async () => {
     rpcErro = { message: "permission denied" };
+    rpcErroNome = "fn_estampar_atribuicao_de_anuncio";
     await rodar({ texto: `oi ${CODIGO}` });
     expect(nomesDeRpc()).toContain("fn_estampar_atribuicao_de_anuncio");
     expect(garantirLeadDaConversa).toHaveBeenCalled();
