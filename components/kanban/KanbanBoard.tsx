@@ -17,6 +17,7 @@ import type { Pipeline, Stage } from "@/lib/kanban/types";
 import { StageColumn } from "./StageColumn";
 import { LeadDossier } from "./LeadDossier";
 import { RetomarComoNovoNegocioDialog } from "./RetomarComoNovoNegocioDialog";
+import { LoseLeadDialog } from "./LoseLeadDialog";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 
 interface KanbanBoardProps {
@@ -100,6 +101,7 @@ export function KanbanBoard({
   // esta opção só troca o destino do erro.
   const [recusaDeCampos, setRecusaDeCampos] = useState<RecusaDeCampos | null>(null);
   const [retomada, setRetomada] = useState<RetomadaPendente | null>(null);
+  const [perdaPendente, setPerdaPendente] = useState<{ leadId: string } | null>(null);
   const moveCard = useMoveCard(pipelineId, {
     onCamposFaltando: setRecusaDeCampos,
     onRetomada: setRetomada,
@@ -211,6 +213,14 @@ export function KanbanBoard({
       if (!lead) return;
 
       const destStageId = destination.droppableId;
+      const etapaDestino = data.stages.find((stage) => stage.id === destStageId);
+      // Perder exige uma decisao explicita. Nao fazemos o move otimista e nao
+      // esperamos o servidor recusar: o proprio gesto de soltar abre a mesma
+      // coleta de motivo usada no menu do card e no Inbox.
+      if (etapaDestino?.is_lost && lead.status !== "lost") {
+        setPerdaPendente({ leadId: lead.id });
+        return;
+      }
       const destList = (grouped.get(destStageId) ?? []).filter(
         (l) => l.id !== draggableId,
       );
@@ -342,6 +352,17 @@ export function KanbanBoard({
           leadId={retomada.leadId}
           stageId={retomada.stageId}
           pipelineId={pipelineId}
+        />
+      )}
+      {perdaPendente && (
+        <LoseLeadDialog
+          open
+          onOpenChange={(aberto) => {
+            if (!aberto) setPerdaPendente(null);
+          }}
+          leadId={perdaPendente.leadId}
+          pipelineId={pipelineId}
+          onLost={() => setPerdaPendente(null)}
         />
       )}
     </DragDropContext>

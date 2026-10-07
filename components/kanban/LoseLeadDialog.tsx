@@ -22,6 +22,8 @@ interface LoseLeadDialogProps {
   onOpenChange: (open: boolean) => void;
   leadId: string;
   pipelineId: string;
+  /** Recarrega a superficie que abriu o dialogo depois da perda confirmada. */
+  onLost?: () => void;
 }
 
 const MAX_LEN = 500;
@@ -31,6 +33,7 @@ export function LoseLeadDialog({
   onOpenChange,
   leadId,
   pipelineId,
+  onLost,
 }: LoseLeadDialogProps) {
   const t = useT();
   const [reasonCode, setReasonCode] = useState<string>("");
@@ -92,6 +95,7 @@ export function LoseLeadDialog({
       setReasonCode("");
       setOtherText("");
       onOpenChange(false);
+      onLost?.();
     } catch {
       // error already toasted
     }
@@ -99,7 +103,7 @@ export function LoseLeadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{t("Marcar como perdido")}</DialogTitle>
           <DialogDescription>
@@ -107,7 +111,7 @@ export function LoseLeadDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3">
+        <div className="grid min-h-0 gap-3 overflow-y-auto pr-1">
           <Label>{t("Motivo")}</Label>
           <div className="grid grid-cols-1 gap-1.5">
             {opcoes.map((opcao) => (
@@ -175,7 +179,7 @@ export function LoseLeadDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

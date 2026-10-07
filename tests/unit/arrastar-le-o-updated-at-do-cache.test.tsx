@@ -17,7 +17,7 @@
  * produzem, sem depender de arrastar pixels no jsdom.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -77,6 +77,7 @@ function quadro(): BoardData {
     stages: [
       { id: "s-1", name: "Novo", position: 0 },
       { id: "s-2", name: "Contato", position: 1 },
+      { id: "s-lost", name: "Perdido", position: 2, is_lost: true },
     ] as unknown as BoardData["stages"],
     leads: [
       {
@@ -97,6 +98,11 @@ const soltarEmS2 = {
   reason: "DROP",
   type: "DEFAULT",
   mode: "FLUID",
+};
+
+const soltarEmPerdido = {
+  ...soltarEmS2,
+  destination: { droppableId: "s-lost", index: 0 },
 };
 
 let qc: QueryClient;
@@ -121,6 +127,18 @@ beforeEach(() => {
 });
 
 describe("o quadro manda o updated_at do card que ele renderiza", () => {
+  it("arrastar para Perdido abre a coleta do motivo antes de qualquer escrita", async () => {
+    render(<KanbanBoard pipelineId={PIPELINE} />, { wrapper });
+    await waitFor(() => expect(capturado.onDragEnd).not.toBeNull());
+
+    await act(async () => {
+      capturado.onDragEnd?.(soltarEmPerdido);
+    });
+
+    expect(screen.getByRole("dialog", { name: "Marcar como perdido" })).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it("o primeiro arrasto manda o updated_at que veio do servidor no board", async () => {
     post.mockResolvedValue({
       data: { id: LEAD, stage_id: "s-2", position_in_stage: 500, updated_at: DEPOIS_DO_PRIMEIRO },
