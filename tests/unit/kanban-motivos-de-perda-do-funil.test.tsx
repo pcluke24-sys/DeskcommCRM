@@ -101,6 +101,18 @@ const radio = (valor: string) =>
 const confirmar = () => screen.getByRole("button", { name: "Confirmar" }) as HTMLButtonElement;
 
 describe("motivos de perda configurados no funil", () => {
+  it("mantém cabeçalho e confirmação visíveis e rola somente a lista em viewport curto", () => {
+    abrir(comFunil({}));
+
+    const dialogo = screen.getByRole("dialog", { name: "Marcar como perdido" });
+    expect(dialogo.className).toContain("max-h-[calc(100dvh-1rem)]");
+    expect(dialogo.className).toContain("overflow-hidden");
+    expect(confirmar()).toBeInTheDocument();
+
+    const lista = radio("price").closest("div.grid.min-h-0");
+    expect(lista?.className).toContain("overflow-y-auto");
+  });
+
   it("oferece os CADASTRADOS no funil e some com o padrão do produto", () => {
     abrir(comFunil({ lost_reasons: ["Sem orçamento", "Fora do perfil"] }));
 

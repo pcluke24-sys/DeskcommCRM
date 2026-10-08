@@ -8,8 +8,8 @@
  *
  * Esta spec dirige a TELA: abre a conversa, usa o seletor "Etapa do funil" do
  * bloco "Leads recentes" e prova no banco que o negócio mudou de etapa pelo MESMO
- * caminho do quadro (atividade `stage_changed` gravada). Etapa de perda não é
- * oferecida — ela pede motivo, e esse diálogo mora no quadro.
+ * caminho do quadro (atividade `stage_changed` gravada). Ao escolher a etapa de
+ * perda, a própria conversa abre o diálogo obrigatório de motivo.
  */
 import { randomInt, randomUUID } from "node:crypto";
 
@@ -123,8 +123,7 @@ test.describe("Etapa do negócio pela conversa", () => {
     await seletor.click();
     const opcoes = page.getByRole("option");
     await expect(opcoes.filter({ hasText: "Pedido confirmado" })).toBeVisible();
-    // Perda pede motivo: fica no quadro, não aqui.
-    await expect(opcoes.filter({ hasText: "Cancelado" })).toHaveCount(0);
+    await expect(opcoes.filter({ hasText: "Cancelado" })).toBeVisible();
     registra(`etapa · opções = ${JSON.stringify(await opcoes.allInnerTexts())}`);
     await captura(page, "etapa-02-opcoes");
 
@@ -152,5 +151,27 @@ test.describe("Etapa do negócio pela conversa", () => {
     await expect(seletor).toContainText("Pedido confirmado", { timeout: 30_000 });
     await expect(page.locator('[data-testid="inbox-campos-lead"]')).toContainText(`Pedidos ${SUFIXO} · Pedido confirmado`);
     await captura(page, "etapa-03-movido");
+
+    // A perda usa a mesma janela do card: selecionar a etapa ainda não grava.
+    await seletor.click();
+    await page.getByRole("option", { name: "Cancelado" }).click();
+    const dialogo = page.getByRole("dialog", { name: "Marcar como perdido" });
+    await expect(dialogo).toBeVisible();
+    await captura(page, "etapa-04-motivo-da-perda");
+
+    await dialogo.getByRole("radio", { name: "Preço" }).click();
+    const perdeu = page.waitForResponse((resposta) =>
+      resposta.url().includes(`/api/v1/leads/${leadId}/lose`) && resposta.request().method() === "POST",
+    );
+    await dialogo.getByRole("button", { name: "Confirmar" }).click();
+    expect((await perdeu).status()).toBe(200);
+
+    await expect
+      .poll(async () => {
+        const { data } = await admin.from("crm_leads").select("status, lost_reason").eq("id", leadId).single();
+        return data;
+      })
+      .toMatchObject({ status: "lost", lost_reason: "price" });
+    await captura(page, "etapa-05-perdido");
   });
 });

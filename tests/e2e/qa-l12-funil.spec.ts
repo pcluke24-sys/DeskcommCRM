@@ -209,14 +209,11 @@ test.describe("Lote 12 — quadro do funil", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  test("#935 caminho 2 — ARRASTO até a etapa de perda: recusa 422 e o card volta", async ({ page }) => {
+  test("#935 caminho 2 — ARRASTO até a etapa de perda: pede o motivo e grava", async ({ page }) => {
     await login(page, c.users.manager!.email, c.password);
     await abreQuadro(page, pipelineId, `Arrasto ${SUFIXO}`);
     const card = page.getByRole("group", { name: `Lead: Arrasto ${SUFIXO}` });
 
-    const resposta = page.waitForResponse(
-      (r) => r.url().includes(`/leads/${leads.arrasto}/move`) && r.request().method() === "POST",
-    );
     // Teclado do @hello-pangea/dnd — o MESMO onDragEnd do mouse.
     await card.focus();
     await page.keyboard.press("Space");
@@ -224,23 +221,34 @@ test.describe("Lote 12 — quadro do funil", () => {
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(500);
     await page.keyboard.press("Space");
-    const r = await resposta;
-    registra(`#935 arrasto · POST /move = ${r.status()} · corpo = ${await r.text()}`);
-    expect(r.status()).toBe(422);
-    expect(await r.text()).toContain("lost_reason_required");
 
-    // A recusa diz a SAÍDA — o L12.QA.4 falhou exatamente por a tela mostrar só a falta.
-    await expect(page.getByText("use “Marcar como perdido” no menu do card")).toBeVisible({ timeout: 10_000 });
-    await captura(page, "935-05-arrasto-recusado-com-aviso");
+    // O gesto não tenta mais uma escrita incompleta para depois explicar o erro:
+    // ele abre a mesma coleta canônica usada no menu e no Inbox.
+    const dialogo = page.getByRole("dialog", { name: "Marcar como perdido" });
+    await expect(dialogo).toBeVisible({ timeout: 10_000 });
+    await captura(page, "935-05-arrasto-pede-motivo");
+
+    await dialogo.locator('input[name="lost-reason"][value="Sem orçamento"]').check();
+    const resposta = page.waitForResponse(
+      (r) => r.url().includes(`/leads/${leads.arrasto}/lose`) && r.request().method() === "POST",
+    );
+    await dialogo.getByRole("button", { name: "Confirmar" }).click();
+    const r = await resposta;
+    registra(`#935 arrasto · POST /lose = ${r.status()} · corpo = ${await r.text()}`);
+    expect(r.status()).toBe(200);
 
     const { data } = await admin
       .from("crm_leads")
       .select("status, stage_id, lost_reason")
       .eq("id", leads.arrasto)
       .single();
-    registra(`#935 arrasto · banco INTACTO = ${JSON.stringify(data)}`);
-    expect((data as { stage_id: string }).stage_id).toBe(etapas.Entrada);
-    expect((data as { status: string }).status).toBe("open");
+    registra(`#935 arrasto · banco = ${JSON.stringify(data)}`);
+    expect(data).toMatchObject({
+      stage_id: etapas.Perdido,
+      status: "lost",
+      lost_reason: "Sem orçamento",
+    });
+    await captura(page, "935-06-arrasto-card-perdido");
   });
 
   // ══════════════════════════════════════════════════════════════════════════

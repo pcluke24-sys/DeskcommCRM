@@ -29,6 +29,7 @@ import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
 import { CustomFieldsEditor, type CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 import { useEditLead } from "@/hooks/kanban/useUpdateLead";
 import { useBulkAction } from "@/hooks/kanban/useBulkAction";
+import { LoseLeadDialog } from "@/components/kanban/LoseLeadDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
@@ -422,17 +423,23 @@ function InboxLeadEditor({
  *
  * Usa o MESMO caminho do "Mover para…" do quadro (`/api/v1/leads/bulk`, que
  * posiciona o card no banco e emite atividade, evento e auditoria), então a
- * etapa que avisa na Central avisa igual. Etapa de PERDA fica de fora: ela pede
- * o motivo, e esse diálogo mora no quadro.
+ * etapa que avisa na Central avisa igual. A etapa de PERDA abre o mesmo dialogo
+ * do quadro, portanto nunca tenta gravar uma perda sem motivo.
  */
 function EtapaDoNegocio({ lead, onMovido }: { lead: LeadRow; onMovido: () => void }) {
   const t = useT();
   const mover = useBulkAction(lead.pipeline_id);
-  const etapas = (lead.etapas_do_funil ?? []).filter((e) => !e.is_lost || e.id === lead.stage_id);
+  const [perdaAberta, setPerdaAberta] = useState(false);
+  const etapas = lead.etapas_do_funil ?? [];
   if (!lead.stage_id || etapas.length === 0) return null;
 
   async function escolher(stageId: string) {
     if (stageId === lead.stage_id) return;
+    const destino = etapas.find((etapa) => etapa.id === stageId);
+    if (destino?.is_lost) {
+      setPerdaAberta(true);
+      return;
+    }
     try {
       await mover.mutateAsync({ action: "move", lead_ids: [lead.id], params: { stage_id: stageId } });
       toast.success(t("Etapa atualizada."));
@@ -459,6 +466,13 @@ function EtapaDoNegocio({ lead, onMovido }: { lead: LeadRow; onMovido: () => voi
           ))}
         </SelectContent>
       </Select>
+      <LoseLeadDialog
+        open={perdaAberta}
+        onOpenChange={setPerdaAberta}
+        leadId={lead.id}
+        pipelineId={lead.pipeline_id}
+        onLost={onMovido}
+      />
     </div>
   );
 }
