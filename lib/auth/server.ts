@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { empresaExigeMfa, exigeCadastroDeMfa } from "@/lib/auth/politica-mfa";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { authTemFalhaTransitoria, AuthIndisponivelError } from "./indisponibilidade";
 import type { AuthUser, Role, UserOrgMembership, ActiveOrg } from "./types";
 
 const ACTIVE_ORG_COOKIE = "active_org";
@@ -130,11 +131,9 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
   // trata com todo o cuidado: significa "não está logado" (estado normal) E
   // "não deu para perguntar" (rede, GoTrue fora do ar, token ilegível).
   //
-  // A ação não muda, e isso é deliberado: sem usuário confirmado, devolver
-  // `null` — e portanto redirecionar para o login — é o desfecho seguro.
-  // Falhar FECHADO na ação continua certo. O que estava errado era falhar
-  // fechado também na INFORMAÇÃO: quem investigasse depois via só uma pessoa
-  // "deslogada", sem nada distinguindo isso de uma falha transitória.
+  // Sem usuário confirmado, o acesso continua fechado. Sessão ausente/inválida
+  // devolve null; indisponibilidade transitória lança erro próprio, sem confundir
+  // timeout com logout. A API pode responder 503 e permitir uma nova tentativa.
   //
   // Custou caro uma vez: um vermelho de e2e em que a barra lateral "perdeu o
   // logo" foi, por eliminação, uma casca de app que não era a casca do app —
@@ -155,13 +154,14 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
     // (rede, GoTrue fora do ar) de `AuthApiError` (token ilegível). Ambas podem
     // chegar com o mesmo `status`, e a mensagem vem em inglês do upstream — sem o
     // nome, distinguir as duas viraria regex sobre texto que muda entre versões.
-    logger.error("[auth] getUser falhou — tratando como não autenticado", {
+    logger.error("[auth] getUser falhou", {
       name: error.name,
       code: error.code ?? null,
       status: error.status ?? null,
       message: error.message,
     });
   }
+  if (authTemFalhaTransitoria(error)) throw new AuthIndisponivelError();
   if (!user) return null;
 
   // Platform admin e Org memberships consultados em paralelo no Supabase:

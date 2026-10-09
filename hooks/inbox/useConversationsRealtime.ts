@@ -1,6 +1,7 @@
 "use client";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { agruparRefetch } from "@/hooks/realtime/agrupar-refetch";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { useRefetchDeSeguranca } from "@/hooks/realtime/useRefetchDeSeguranca";
 import { apiClient } from "@/lib/api/client";
@@ -66,13 +67,7 @@ export type ConversationWithContact = Conversation & {
 
 /** O vocabulário de LEITURA (7), que inclui os dois estados que só o motor escreve. */
 export type StatusDeConversa =
-  | "open"
-  | "pending"
-  | "resolved"
-  | "claimed"
-  | "ai_handling"
-  | "closed"
-  | "archived";
+  "open" | "pending" | "resolved" | "claimed" | "ai_handling" | "closed" | "archived";
 
 export interface ConversationsFilters {
   /** Um status ou vários — a aba Fila precisa de dois (open + pending). */
@@ -101,15 +96,13 @@ interface ListResponse {
   meta?: { cursor?: string | null; has_more?: boolean };
 }
 
-export function useConversationsRealtime(
-  filters: ConversationsFilters,
-  orgId: string | null,
-) {
+export function useConversationsRealtime(filters: ConversationsFilters, orgId: string | null) {
   const qc = useQueryClient();
-  const queryKey = useMemo(() => ["conversations", filters] as const, [filters]);
+  const queryKey = useMemo(() => ["conversations", filters, orgId] as const, [filters, orgId]);
 
   const query = useInfiniteQuery({
     queryKey,
+    enabled: !!orgId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       const qs = new URLSearchParams();
@@ -148,9 +141,15 @@ export function useConversationsRealtime(
     refetchOnWindowFocus: true,
   });
 
-  const onChange = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ["conversations"] });
-  }, [qc]);
+  const refetchAgrupado = useMemo(
+    () =>
+      agruparRefetch(() => {
+        void qc.invalidateQueries({ queryKey, exact: true });
+      }, 500),
+    [qc, queryKey],
+  );
+  useEffect(() => () => refetchAgrupado.cancelar(), [refetchAgrupado]);
+  const onChange = useCallback(() => refetchAgrupado.solicitar(), [refetchAgrupado]);
 
   // G4-01 (visibility_mode): a subscription postgres_changes HERDA a RLS de
   // SELECT de `conversations` — o Supabase Realtime avalia as policies do usuário
