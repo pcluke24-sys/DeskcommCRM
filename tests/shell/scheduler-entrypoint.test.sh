@@ -4,13 +4,10 @@
 #
 # O que ele guarda, e por que cada coisa:
 #
-# 1. O SEGREDO SOBREVIVE INTEIRO E LITERAL. O crond executa cada linha do crontab
-#    por `/bin/sh -c`, então o valor é REAVALIADO na hora de disparar. A versão
-#    anterior interpolava o INTERNAL_SECRET dentro de aspas duplas: um `$` no
-#    valor virava expansão de variável (header truncado → todo cron respondendo
-#    401 em silêncio) e uma crase virava substituição de comando — execução
-#    arbitrária a cada minuto. Aqui o teste monta o header com um `sh` DE VERDADE,
-#    como o crond faria, e compara byte a byte.
+# 1. O SEGREDO SOBREVIVE INTEIRO E LITERAL. Ele fica num arquivo 600 e o executor
+#    recebe apenas o caminho. A versão anterior interpolava o INTERNAL_SECRET na
+#    linha reavaliada pelo crond: `$`, crase ou aspas podiam truncar o header ou
+#    executar comando. Aqui o teste compara o arquivo byte a byte.
 #
 # 2. NENHUMA ROTA SE PERDE. O crontab saiu do `command:` inline do compose e veio
 #    para cá; a contagem tem de bater com app/api/v1/cron. (A cerca principal é
@@ -25,10 +22,14 @@
 #
 # 4. FALHA FECHADA SEM SEGREDO. Sem INTERNAL_SECRET os crons responderiam 401 e
 #    nada aconteceria — sem erro, sem log, sem sintoma. O script recusa subir.
+#
+# 5. UMA ROTINA NAO SOBREPOE A SI MESMA. Se uma rodada exceder a cadencia, a
+#    seguinte sai neutra em vez de multiplicar conexoes contra o Supabase.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 ENTRYPOINT="docker/scheduler/entrypoint.sh"
+RUNNER="docker/scheduler/run-job.sh"
 fail=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -77,8 +78,8 @@ check "o crontab tem linhas (controle: o grep abaixo não passa por vacuidade)" 
   test "$(grep -c 'api/v1/cron/' "$TMP/crontab")" -gt 0
 check "nenhuma linha do crontab contém o segredo" \
   test "$(grep -cF "$MARCADOR" "$TMP/crontab")" -eq 0
-check "toda linha lê o header do arquivo (-H @)" \
-  test "$(grep -c "curl .*-H '@$TMP/auth/header'" "$TMP/crontab")" -eq "$(grep -c . "$TMP/crontab")"
+check "toda linha passa pelo executor anti-sobreposicao" \
+  test "$(grep -c '/usr/local/bin/run-job.sh' "$TMP/crontab")" -eq "$(grep -c . "$TMP/crontab")"
 check "o diretório do header é 700" \
   sh -c "ls -ld '$TMP/auth' | grep -q '^drwx------'"
 check "o arquivo do header é 600" \
@@ -92,25 +93,8 @@ HOSTIL='seg`whoami`redo$HOME-com'\''aspa-e-"aspas"'
 RC="$(rodar "$HOSTIL")"
 check "gerou o crontab mesmo com segredo cheio de metacaractere" test "$RC" -eq 0
 
-# A medição que importa: pegar a PRIMEIRA linha, tirar o prefixo de agendamento,
-# e mandar um `sh` de verdade avaliá-la — exatamente o que o crond faz. O `curl`
-# é dublado por um script que imprime o header que recebeu.
-# `-H @arquivo` é lido como o curl lê: o conteúdo do arquivo é o header.
-printf '#!/bin/sh\nwhile [ $# -gt 0 ]; do [ "$1" = "-H" ] && { case "$2" in @*) cat "${2#@}";; *) printf "%%s" "$2";; esac; exit 0; }; shift; done\nexit 1\n' > "$TMP/bin/curl"
-chmod +x "$TMP/bin/curl"
-LINHA="$(head -1 "$TMP/crontab")"
-COMANDO="${LINHA#* * * * * }"                 # tira o agendamento de 5 campos
-COMANDO="${COMANDO%% >/dev/null*}"            # tira a redireção
-RECEBIDO="$(PATH="$TMP/bin:$PATH" sh -c "$COMANDO")"
-ESPERADO="Authorization: Bearer ${HOSTIL}"
-if [ "$RECEBIDO" = "$ESPERADO" ]; then
-  printf '  ✓ o header chega ao curl byte a byte igual ao segredo do .env\n'
-else
-  printf '  ✗ o segredo foi corrompido pelo sh do crond\n'
-  printf '     esperado: %s\n' "$ESPERADO"
-  printf '     recebido: %s\n' "$RECEBIDO"
-  fail=1
-fi
+check "o header preserva o segredo byte a byte" \
+  test "$(cat "$TMP/auth/header")" = "Authorization: Bearer ${HOSTIL}"
 # Controle negativo do próprio instrumento: se a crase tivesse sido executada, o
 # arquivo conteria a saída de `whoami` no lugar dela, não o texto literal.
 check "a crase NÃO foi executada (está literal no arquivo do header)" \
@@ -126,22 +110,32 @@ check "sai com código 1" test "$RC" -eq 1
 check "explica o motivo na saída" grep -q "INTERNAL_SECRET" "$TMP/saida"
 check "não deixou crontab pela metade" test ! -s "$TMP/crontab"
 
+echo "scheduler: a mesma rotina nunca sobrepoe a rodada anterior"
+mkdir -p "$TMP/locks"
+printf '#!/bin/sh\necho chamada >> "$CALLS_FILE"\nsleep 1\nexit 0\n' > "$TMP/bin/curl"
+chmod +x "$TMP/bin/curl"
+CALLS_FILE="$TMP/calls" PATH="$TMP/bin:$PATH" CRON_LOCK_DIR="$TMP/locks" \
+  sh "$RUNNER" 5 api/v1/cron/prospecting http://app:3000 "$TMP/auth/header" \
+  >"$TMP/primeira.out" 2>"$TMP/primeira.err" &
+PID_PRIMEIRA=$!
+for _ in 1 2 3 4 5; do
+  [ -d "$TMP/locks/api_v1_cron_prospecting.lock" ] && break
+  sleep 0.1
+done
+CALLS_FILE="$TMP/calls" PATH="$TMP/bin:$PATH" CRON_LOCK_DIR="$TMP/locks" \
+  sh "$RUNNER" 5 api/v1/cron/prospecting http://app:3000 "$TMP/auth/header" \
+  >"$TMP/segunda.out" 2>"$TMP/segunda.err"
+wait "$PID_PRIMEIRA"
+check "a segunda rodada sai neutra" grep -q 'PULOU api/v1/cron/prospecting' "$TMP/segunda.err"
+check "somente um curl foi executado" test "$(wc -l < "$TMP/calls" | tr -d ' ')" -eq 1
+check "a trava e liberada ao terminar" test ! -d "$TMP/locks/api_v1_cron_prospecting.lock"
+
 echo "scheduler: uma falha de cron não some em silêncio (#1109)"
-# Reexecuta o entrypoint (o bloco acima deixou o crontab vazio) e troca o
-# `curl` por um dublê que FALHA como um 401 de verdade: `-f` sai 22 e `-S`
-# imprime o status para o STDERR.
-RC="$(rodar 'segredo-simples')"
-check "gerou o crontab de novo" test "$RC" -eq 0
 printf '#!/bin/sh\necho "curl: (22) The requested URL returned error: 401" >&2\nexit 22\n' > "$TMP/bin/curl"
 chmod +x "$TMP/bin/curl"
-LINHA_FALHA="$(grep -m1 'sync-model-catalog' "$TMP/crontab")"
-# Roda a linha INTEIRA, exatamente como o `sh -c` do crond roda — sem cortar o
-# `||` que é o objeto deste bloco.
-if [ -n "$LINHA_FALHA" ]; then
-  PATH="$TMP/bin:$PATH" sh -c "${LINHA_FALHA#* * * * * }" >"$TMP/falha.out" 2>"$TMP/falha.err"
-else
-  printf 'sem linha de sync-model-catalog no crontab\n' >"$TMP/falha.err"
-fi
+PATH="$TMP/bin:$PATH" CRON_LOCK_DIR="$TMP/locks" \
+  sh "$RUNNER" 5 api/v1/cron/sync-model-catalog http://app:3000 "$TMP/auth/header" \
+  >"$TMP/falha.out" 2>"$TMP/falha.err" || true
 check "o STDOUT continua descartado (o corpo da resposta não vaza pro log)" \
   test ! -s "$TMP/falha.out"
 check "o status do 401 chega ao STDERR (era isto que o 2>&1 engolia)" \
