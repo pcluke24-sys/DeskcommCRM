@@ -3,11 +3,37 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
+const { baixarComTentativas } = require("../../.github/actions/preparar-registro/baixar.cjs") as {
+  baixarComTentativas: (imagem: string, executar: (imagem: string) => void, esperar: (ms: number) => Promise<void>) => Promise<void>;
+};
 const { comEspelho } = require("../../.github/actions/preparar-registro/configurar.cjs") as {
   comEspelho: (config: Record<string, unknown>) => Record<string, unknown>;
 };
 
 describe("cache público de imagens na esteira", () => {
+  it("recupera download transitório sem repetir um download já bem sucedido", async () => {
+    let chamadas = 0;
+    const esperas: number[] = [];
+    await baixarComTentativas("pgvector/pgvector:pg15", () => {
+      chamadas++;
+      if (chamadas < 3) throw new Error("timeout do registro");
+    }, async (ms) => { esperas.push(ms); });
+    expect(chamadas).toBe(3);
+    expect(esperas).toEqual([5000, 10000]);
+  });
+  it("mantém a falha após quatro tentativas, sem aprovar o gate", async () => {
+    let chamadas = 0;
+    await expect(baixarComTentativas("pgvector/pgvector:pg17", () => {
+      chamadas++;
+      throw new Error("indisponível");
+    }, async () => {})).rejects.toThrow("indisponível");
+    expect(chamadas).toBe(4);
+  });
+  it("não espera nem repete quando o registro responde", async () => {
+    let esperas = 0;
+    await baixarComTentativas("moby/buildkit:buildx-stable-1", () => {}, async () => { esperas++; });
+    expect(esperas).toBe(0);
+  });
   it("preserva a configuração existente e prioriza o cache sem duplicá-lo", () => {
     const input = { "log-driver": "json-file", "registry-mirrors": ["https://outro.example"] };
     const result = comEspelho(input);

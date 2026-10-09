@@ -14,3 +14,4 @@ runs:
         sudo --preserve-env=RUNNER_ENVIRONMENT node "${GITHUB_ACTION_PATH}/configurar.cjs"
         sudo systemctl restart docker
         docker info --format '{{json .RegistryConfig.Mirrors}}'
+        node "${GITHUB_ACTION_PATH}/baixar.cjs"

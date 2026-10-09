@@ -77,3 +77,11 @@ só é reconfigurado/reiniciado em runner efêmero github-hosted, nunca na VPS o
 em executor persistente. Configuração anterior é preservada, sem credenciais.
 O cache pode falhar ou não ter determinada imagem; o fallback ao Docker Hub
 permanece. Não é garantia de disponibilidade. Nenhum gate foi removido.
+
+Na nova consulta, o cache respondeu 404 para pgvector:pg15/pg17 e BuildKit:
+não é uma cópia garantida. A repetição do job destravou o download do app e
+do pg17; pg15 ainda tinha o timeout anterior. Preparação agora baixa a imagem
+pública necessária com até quatro tentativas e espera crescente (5/10/15s),
+antes do teste. Cada download tem teto de 120s. Quatro falhas continuam
+reprovando a preparação; nenhum teste vermelho é convertido em sucesso.
+Esse passo só alcança runners temporários e não executa na produção.
