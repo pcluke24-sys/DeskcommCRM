@@ -1,0 +1,17 @@
+name: Preparar cache público de imagens
+description: Prioriza o cache público do Docker Hub somente em runners efêmeros do GitHub.
+runs:
+  using: composite
+  steps:
+    - name: Configurar mirror no runner efêmero
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
+          echo "Executor persistente: configuração do Docker preservada."
+          exit 0
+        fi
+        sudo --preserve-env=RUNNER_ENVIRONMENT node "${GITHUB_ACTION_PATH}/configurar.cjs"
+        sudo systemctl restart docker
+        docker info --format '{{json .RegistryConfig.Mirrors}}'
+        node "${GITHUB_ACTION_PATH}/baixar.cjs"

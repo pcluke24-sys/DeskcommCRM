@@ -10,9 +10,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * para perguntar" (GoTrue fora do ar, rede, token ilegível), uma falha transitória
  * virava, no log, uma pessoa simplesmente deslogada — indistinguível do normal.
  *
- * A ação segue certa e não muda: sem usuário confirmado, `null` → login. Falhar
- * FECHADO na ação é o desfecho seguro. O que estava errado era falhar fechado
- * também na INFORMAÇÃO.
+ * Sem usuário confirmado, o acesso continua fechado. Sessão ausente/inválida
+ * retorna null; falha transitória lança erro próprio e não simula logout.
  *
  * ## O segundo defeito, que o conserto do primeiro quase introduziu
  *
@@ -83,7 +82,7 @@ describe("loadAuthUser — o erro do getUser deixa rastro", () => {
       },
     };
 
-    expect(await loadAuthUser()).toBeNull(); // a ação não muda: falha fechado
+    await expect(loadAuthUser()).rejects.toThrow(/Não foi possível verificar sua sessão/);
     expect(erros).toHaveLength(1);
     expect(erros[0]!.msg).toMatch(/getUser falhou/);
     // Sem estes campos a linha não diagnostica nada — seria um "algo deu errado"

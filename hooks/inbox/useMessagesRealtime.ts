@@ -1,6 +1,7 @@
 "use client";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { agruparRefetch } from "@/hooks/realtime/agrupar-refetch";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { useRefetchDeSeguranca } from "@/hooks/realtime/useRefetchDeSeguranca";
 import { apiClient } from "@/lib/api/client";
@@ -54,10 +55,17 @@ export function useMessagesRealtime(conversationId: string | null) {
     refetchOnWindowFocus: true,
   });
 
-  const onChange = useCallback(() => {
-    if (conversationId) qc.invalidateQueries({ queryKey: ["messages", conversationId] });
-    qc.invalidateQueries({ queryKey: ["conversations"] });
-  }, [qc, conversationId]);
+  const refetchAgrupado = useMemo(
+    () =>
+      agruparRefetch(() => {
+        if (!conversationId) return;
+        void qc.invalidateQueries({ queryKey, exact: true });
+        void qc.invalidateQueries({ queryKey: ["conversations"] });
+      }, 500),
+    [qc, conversationId, queryKey],
+  );
+  useEffect(() => () => refetchAgrupado.cancelar(), [refetchAgrupado]);
+  const onChange = useCallback(() => refetchAgrupado.solicitar(), [refetchAgrupado]);
 
   const { status: realtimeStatus, ultimaEntrega } = useRealtimeChannel({
     name: conversationId ? `messages-${conversationId}` : "messages-disabled",

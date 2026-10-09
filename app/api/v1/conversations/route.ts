@@ -7,6 +7,7 @@ import { type NextRequest } from "next/server";
 import { ApiError } from "@/lib/api/types";
 import { fail, ok } from "@/lib/api/wrappers";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { AuthIndisponivelError } from "@/lib/auth/indisponibilidade";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { listConversationsQuerySchema } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
@@ -20,15 +21,22 @@ export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
   const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser();
-  if (authErr || !user) {
+  // loadAuthUser valida pelo getUser e resolve permissões nesta requisição.
+  // Não repetir a chamada remota antes dele (não há cache global de sessão).
+  let authUser;
+  try {
+    authUser = await loadAuthUser();
+  } catch (err) {
+    if (!(err instanceof AuthIndisponivelError)) throw err;
+    const response = fail("auth_unavailable", err.message, 503, { requestId });
+    response.headers.set("Retry-After", "5");
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  }
+  if (!authUser) {
     return fail("unauthenticated", "Auth required.", 401, { requestId });
   }
 
-  const authUser = await loadAuthUser();
   const t = (texto: string) => traduzir(texto, authUser?.idioma ?? "pt-BR");
   const activeOrg = authUser ? await resolveActiveOrg(authUser) : null;
   if (!activeOrg) {
@@ -73,7 +81,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       supabase,
       {
         organization_id: activeOrg.orgId,
-        actor: { type: "user", id: user.id },
+        actor: { type: "user", id: authUser.id },
         requestId,
         idioma: authUser?.idioma,
       },

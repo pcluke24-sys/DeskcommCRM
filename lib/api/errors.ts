@@ -23,6 +23,7 @@ export const ApiErrorCodes = {
   // 401 — auth
   unauthorized: "unauthorized", // segredo interno inválido/ausente (rotas host↔app, ex. system/agent)
   unauthenticated: "unauthenticated",
+  auth_unavailable: "auth_unavailable", // 503: sessão não verificada por falha transitória
   token_expired: "token_expired",
   token_revoked: "token_revoked",
   invalid_credentials: "invalid_credentials",
