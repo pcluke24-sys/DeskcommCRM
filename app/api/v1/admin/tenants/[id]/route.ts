@@ -38,6 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       status,
       onboarded_at,
       suspended_at,
+      suspended_kind,
       created_at,
       settings
     `,

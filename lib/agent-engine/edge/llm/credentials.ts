@@ -15,11 +15,16 @@
  * A config é lida do DB A CADA chamada (resolveOrgLlmConfig) — trocar modelo/
  * provider/teto é UPDATE na config, sem restart nem deploy.
  */
-import type pg from "pg";
-import { moduloIaEstaLiberado, ModuloIaBloqueadoError } from "@/lib/ai/modulo";
-import { z } from "zod";
+import type pg from 'pg';
 
-import { byteaToBuffer, decryptKey } from "@/lib/crypto/aes_gcm";
+import { lerLoginCodexRenovandoSeProxima } from '@/lib/ai/credenciais/login-codex';
+import { PROVEDOR_POR_ASSINATURA } from '@/lib/ai/pontos/provedores';
+import { PROVEDOR_DE_RESERVA_DA_ASSINATURA } from '@/lib/ai/pontos/reserva-da-assinatura';
+import type { TokensDoCodex } from '@/lib/ai/pontos/pkce-da-assinatura';
+import { z } from 'zod';
+
+import { byteaToBuffer, decryptKey } from '@/lib/crypto/aes_gcm';
+import { createAdminClient } from '@/lib/supabase/admin';
 import {
   LIMIAR_PADRAO_PCT,
   normalizarChaveDeOrcamento,
@@ -95,8 +100,8 @@ export function llmEdgeConfigFromEnv(env: {
   AI_BUDGET_ENFORCEMENT?: string;
   DEEPSEEK_THINKING?: string;
 }): LlmEdgeConfig {
-  const ttl = env.LLM_CACHE_TTL ?? "1h";
-  if (ttl !== "5m" && ttl !== "1h") {
+  const ttl = env.LLM_CACHE_TTL ?? '1h';
+  if (ttl !== '5m' && ttl !== '1h') {
     throw new Error("LLM_CACHE_TTL inválido — use '5m' ou '1h' (default 1h)");
   }
   const raciocinio = env.DEEPSEEK_THINKING ?? 'provider';
@@ -119,10 +124,10 @@ export function llmEdgeConfigFromEnv(env: {
 
 /** Org sem credencial LLM utilizável — erro tipado, mensagem sem valores (credencial fora). */
 export class LlmNotConfiguredError extends Error {
-  override readonly name = "llm_not_configured";
+  override readonly name = 'llm_not_configured';
   constructor() {
     super(
-      "org sem credencial LLM utilizável — cadastre uma chave BYOK ativa/validada em ai_provider_credentials ou defina ANTHROPIC_API_KEY / OPENAI_API_KEY (fallback de plataforma, conforme o provider do modelo)",
+      'org sem credencial LLM utilizável — cadastre uma chave BYOK ativa/validada em ai_provider_credentials ou defina ANTHROPIC_API_KEY / OPENAI_API_KEY (fallback de plataforma, conforme o provider do modelo)',
     );
   }
 }
@@ -205,14 +210,14 @@ export interface OrgLlmConfig {
 // que continua sendo jsonb livre.
 const llmSettingsSchema = z
   .object({
-    provider: z.string().min(1).catch("anthropic"),
+    provider: z.string().min(1).catch('anthropic'),
     default_model: z.string().min(1).nullable().catch(null),
     params: z.record(z.string(), z.unknown()).catch({}),
     enabled_models: z.array(z.string()).catch([]),
   })
   .passthrough()
   .catch({
-    provider: "anthropic",
+    provider: 'anthropic',
     default_model: null,
     params: {},
     enabled_models: [],
@@ -231,7 +236,6 @@ const llmSettingsSchema = z
  */
 const SQL_CONFIG_COM_ORCAMENTO = `
   select o.settings->'llm'            as llm,
-         o.settings                  as module_settings,
          b.monthly_limit_cents        as teto,
          b.enforcement_mode           as modo,
          b.enforcement_effective_at   as efetivo_em,
@@ -241,10 +245,9 @@ const SQL_CONFIG_COM_ORCAMENTO = `
    where o.id = $1`;
 
 /** A query de antes da 0159 — a rede quando o schema do clone está atrasado. */
-const SQL_CONFIG_LEGADO = `select settings->'llm' as llm, settings as module_settings from organizations where id = $1`;
+const SQL_CONFIG_LEGADO = `select settings->'llm' as llm from organizations where id = $1`;
 
 interface LinhaDeConfig {
-  module_settings?: unknown;
   llm: unknown;
   teto?: number | string | null;
   modo?: string | null;
@@ -253,7 +256,7 @@ interface LinhaDeConfig {
 }
 
 const ORCAMENTO_DESLIGADO: OrcamentoDaOrg = {
-  modo: "off",
+  modo: 'off',
   tetoCents: 0,
   efetivoEm: null,
   limiarPct: LIMIAR_PADRAO_PCT,
@@ -268,7 +271,7 @@ const ORCAMENTO_DESLIGADO: OrcamentoDaOrg = {
 function causaDoBanco(err: unknown): string {
   const codigo = (err as { code?: unknown } | null)?.code;
   const texto = err instanceof Error ? err.message : String(err);
-  return `${typeof codigo === "string" ? codigo : "sem_sqlstate"}: ${texto}`.slice(0, 300);
+  return `${typeof codigo === 'string' ? codigo : 'sem_sqlstate'}: ${texto}`.slice(0, 300);
 }
 
 /**
@@ -316,10 +319,9 @@ export async function resolveOrgLlmConfig(
     ({ rows } = await db.query<LinhaDeConfig>(SQL_CONFIG_LEGADO, [organizationId]));
   }
   if (rows.length === 0) {
-    throw new Error("organização inexistente ao resolver config LLM");
+    throw new Error('organização inexistente ao resolver config LLM');
   }
   const linha = rows[0];
-  if (!moduloIaEstaLiberado(linha?.module_settings)) throw new ModuloIaBloqueadoError();
   const settings = llmSettingsSchema.parse(linha?.llm ?? {});
   const provider = override?.provider ?? settings.provider;
 
@@ -336,6 +338,51 @@ export async function resolveOrgLlmConfig(
           limiarPct: Number(linha?.limiar_pct ?? LIMIAR_PADRAO_PCT),
         };
 
+  // ═══ A ASSINATURA NÃO TEM CHAVE — E CAI SOZINHA NA QUE TEM (#1639) ═══
+  //
+  // Este provedor lê o par de tokens da empresa pelo leitor próprio
+  // (`lerLoginCodexRenovandoSeProxima`), que ainda renova antes de devolver
+  // quando a janela de 8 dias abriu — com `userId: null`, porque ninguém pediu
+  // aquela renovação. Sem linha utilizável (módulo da instalação fora, login
+  // desconectado, envelope que não abre), a chamada NÃO morre: a RESERVA
+  // assume, resolvendo o provedor `openai` pela escada de sempre (credencial
+  // da organização, senão o `.env` da instalação). Sem nenhuma das duas a
+  // escada termina em `LlmNotConfiguredError` — o erro de sempre, sem inventar
+  // outro.
+  if (provider === PROVEDOR_POR_ASSINATURA) {
+    let tokens: TokensDoCodex | null = null;
+    try {
+      tokens = await lerLoginCodexRenovandoSeProxima({ admin: createAdminClient(), orgId: organizationId });
+    } catch {
+      // "Resolvedor nunca lança": se o Supabase não responder, a assinatura
+      // está indisponível — e indisponível é justamente o caso que a reserva
+      // existe para atender.
+      tokens = null;
+    }
+    if (tokens !== null) {
+      return {
+        provider,
+        apiKey: tokens.access_token,
+        baseUrl: null,
+        origemDaChave: 'credencial_da_organizacao',
+        defaultModel: settings.default_model ?? null,
+        params: settings.params,
+        enabledModels: settings.enabled_models,
+        orcamento,
+        orcamentoIndisponivelPorque,
+      };
+    }
+    return resolveOrgLlmConfig(db, cfg, organizationId, {
+      ...override,
+      provider: PROVEDOR_DE_RESERVA_DA_ASSINATURA,
+      // A reserva é a chave da EMPRESA (ou a da instalação), nunca a linha do
+      // login: `credentialId` apontando para ela tentaria decifrar o JSON dos
+      // tokens como chave de API — a recusa que a 04x/1672 já tem por outra
+      // porta, repetida aqui por não haver porta única.
+      credentialId: null,
+    });
+  }
+
   // Credencial: a ESCOLHIDA na versão publicada quando houver (ainda exigindo
   // ativa+validada — publish valida, mas a credencial pode ser revogada depois);
   // senão a mais recente ativa/validada do provider. Sempre escopada pela org.
@@ -346,9 +393,17 @@ export async function resolveOrgLlmConfig(
         api_key_iv: unknown;
         api_key_tag: unknown;
       }>(
+        // O CAMPO POR credentialId (#1672, item 9): a busca filtrava só por
+        // empresa + id, SEM `provider`. Um vínculo apontando para a linha do
+        // login por assinatura decifraria o JSON dos tokens e o mandaria como
+        // CHAVE DE API. Com o filtro, e com o do caminho de baixo, a linha do
+        // login é invisível para o resolvedor — ligado ou desligado o
+        // interruptor da instalação — e só o leitor próprio
+        // (`lib/ai/credenciais/login-codex.ts`) a enxerga.
         `select id, api_key_encrypted, api_key_iv, api_key_tag
          from ai_provider_credentials
          where organization_id = $1 and id = $2
+           and provider <> '${PROVEDOR_POR_ASSINATURA}'
            and is_active and validated_at is not null
          limit 1`,
         [organizationId, override.credentialId],
@@ -359,9 +414,13 @@ export async function resolveOrgLlmConfig(
         api_key_iv: unknown;
         api_key_tag: unknown;
       }>(
+        // Mesma recusa do caminho de cima, pela outra porta (#1672, item 9):
+        // se um dia `settings.llm.provider` apontar para o provedor de login,
+        // esta query devolveria o par de tokens como se fosse chave.
         `select id, api_key_encrypted, api_key_iv, api_key_tag
          from ai_provider_credentials
          where organization_id = $1 and provider = $2
+           and provider <> '${PROVEDOR_POR_ASSINATURA}'
            and is_active and validated_at is not null
          order by created_at desc
          limit 1`,
@@ -422,4 +481,59 @@ export async function resolveOrgLlmConfig(
     orcamento,
     orcamentoIndisponivelPorque,
   };
+}
+
+/**
+ * A EMPRESA TEM CHAVE DE RESERVA? — o `temChaveDeReserva` da política da queda
+ * (`decidirQuedaDoProvedor`), respondido pela própria escada de resolução em
+ * vez de por um SELECT solto.
+ *
+ * `true` = resolve o provedor `openai` desta organização (credencial da
+ * empresa, e senão o `.env` da instalação). `false` = `LlmNotConfiguredError`,
+ * o mesmo erro que a chamada encontraria sem a reserva.
+ *
+ * É a pergunta de quem está prestes a perder a assinatura: se ela for `false`,
+ * não há para onde cair e a conversa passa para um humano (item 3 da issue) —
+ * decisão tomada a partir do motivo, nunca aqui.
+ */
+export async function temChaveDeReserva(
+  db: pg.Pool,
+  cfg: LlmEdgeConfig,
+  organizationId: string,
+): Promise<boolean> {
+  try {
+    const reserva = await resolveOrgLlmConfig(db, cfg, organizationId, {
+      provider: PROVEDOR_DE_RESERVA_DA_ASSINATURA,
+      credentialId: null,
+    });
+    return reserva.apiKey.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A empresa tem a IA de sempre? A MESMA pergunta que a chamada dela faz antes de
+ * sair (`runModelCall` começa por `resolveOrgLlmConfig`): sem chave utilizável,
+ * ela nunca responde.
+ *
+ * É o portão do Jev roteando sozinho (decisão B do mantenedor, doc 89, que
+ * mantém a R2 do DEC-012): sem a IA de sempre, o modo sob demanda não liga e
+ * vale a regra de hoje. Qualquer falha vale "não tem" — falha FECHADA na ação
+ * (o Jev não passa a rotear sozinho por um erro de leitura) e ABERTA na
+ * informação: o turno segue em comparação, chama a IA de sempre, e é a
+ * chamada dela que registra o motivo (`intent-classifier: falha ao classificar`).
+ */
+export async function temIaDeSempre(
+  db: pg.Pool,
+  cfg: LlmEdgeConfig,
+  organizationId: string,
+  provider?: string | null,
+): Promise<boolean> {
+  try {
+    await resolveOrgLlmConfig(db, cfg, organizationId, provider ? { provider } : undefined);
+    return true;
+  } catch {
+    return false;
+  }
 }

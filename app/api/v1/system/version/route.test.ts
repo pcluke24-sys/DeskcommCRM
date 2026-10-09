@@ -1,23 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-import { isPlatformOwnerInPrimaryOrg, loadAuthUser } from "@/lib/auth/server";
+import { loadAuthUser } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
-import { versaoOficialMaisRecente } from "@/lib/system/official-release";
-import type * as OfficialReleaseModule from "@/lib/system/official-release";
 
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: vi.fn(),
-  isPlatformOwnerInPrimaryOrg: vi.fn(async (user: { is_platform_admin?: boolean }) => Boolean(user?.is_platform_admin)),
   mfaEmDivida: vi.fn(async () => false),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+// A escrita da instalação passa por requirePlatformAdminEscrita (scope 'full' +
+// MFA em dia): o dublê entrega a linha REAL de `platform_admins`, para que a
+// regra rode de verdade em vez de ser encenada.
+const pa = vi.hoisted(() => ({ row: null as Record<string, unknown> | null }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    auth: { getUser: async () => ({ data: { user: { id: "11111111-1111-4111-8111-111111111111" } } }) },
+    from: () => {
+      const q = { select: () => q, eq: () => q, is: () => q, maybeSingle: async () => ({ data: pa.row }) };
+      return q;
+    },
+  }),
+}));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
-vi.mock("@/lib/system/official-release", async (importOriginal) => {
-  const original = await importOriginal<typeof OfficialReleaseModule>();
-  return { ...original, versaoOficialMaisRecente: vi.fn(async () => "1.2.0") };
-});
 
 const OWNER = { id: "11111111-1111-4111-8111-111111111111", email: "dono@x.com", is_platform_admin: true };
 const MEMBRO = { ...OWNER, id: "22222222-2222-4222-8222-222222222222", is_platform_admin: false };
@@ -49,8 +55,7 @@ let runSelectError: { message: string } | null;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(versaoOficialMaisRecente).mockResolvedValue("1.2.0");
-  vi.mocked(isPlatformOwnerInPrimaryOrg).mockImplementation(async (user) => user.is_platform_admin);
+  pa.row = { user_id: "11111111-1111-4111-8111-111111111111", scope: "full", mfa_required: false, revoked_at: null };
   inserted = null;
   runRow = null;
   runUpdatePatch = null;
@@ -169,21 +174,6 @@ describe("GET /api/v1/system/version", () => {
     expect(body.data.is_owner).toBe(false);
     expect(body.data.update_available).toBeUndefined();
     expect(body.data.notes).toBeUndefined();
-    expect(body.data.official_update_available).toBeUndefined();
-    expect(versaoOficialMaisRecente).not.toHaveBeenCalled();
-  });
-
-  it("esconde a atualização do dono enquanto ele navega numa organização cliente", async () => {
-    vi.mocked(loadAuthUser).mockResolvedValue(OWNER as never);
-    vi.mocked(isPlatformOwnerInPrimaryOrg).mockResolvedValue(false);
-    const { GET } = await import("../version/route");
-    const body = await (await GET(get())).json();
-    expect(body.data.current_version).toBe("1.0.0");
-    expect(body.data.is_owner).toBe(false);
-    expect(body.data.update_available).toBeUndefined();
-    expect(body.data.notes).toBeUndefined();
-    expect(body.data.official_update_available).toBeUndefined();
-    expect(versaoOficialMaisRecente).not.toHaveBeenCalled();
   });
 
   it("entrega o estado completo e a faixa do CHANGELOG para o dono", async () => {
@@ -191,26 +181,12 @@ describe("GET /api/v1/system/version", () => {
     const { GET } = await import("../version/route");
     const body = await (await GET(get())).json();
     expect(body.data.update_available).toBe(true);
-    expect(body.data.official_latest_version).toBeUndefined();
-    expect(body.data.official_update_available).toBe(false);
-    expect(versaoOficialMaisRecente).not.toHaveBeenCalled();
     expect(body.data.notes.sections.map((s: { version: string }) => s.version)).toEqual(["1.1.0"]);
     expect(body.data.notes.sections[0].body).toContain("botão");
     expect(body.data.notes.requires_attention).toEqual([
       { version: "1.1.0", texto: expect.stringContaining("reconecte o número") },
     ]);
     expect(body.data.notes.complete).toBe(true);
-  });
-
-  it("consulta a versão oficial quando não há atualização personalizada disponível", async () => {
-    versionRow.latest_version = "1.0.0";
-    vi.mocked(loadAuthUser).mockResolvedValue(OWNER as never);
-    const { GET } = await import("../version/route");
-    const body = await (await GET(get())).json();
-    expect(body.data.update_available).toBe(false);
-    expect(body.data.official_latest_version).toBe("1.2.0");
-    expect(body.data.official_update_available).toBe(true);
-    expect(versaoOficialMaisRecente).toHaveBeenCalledOnce();
   });
 
   it("entrega TODAS as seções entre a instalada e a alvo, com o aviso do meio nomeado", async () => {
@@ -345,6 +321,65 @@ describe("GET /api/v1/system/version", () => {
     expect(body.data.current_version).toBe("1.0.0");
     expect(body.data.update_available).toBe(true);
     expect(body.data.run.superseded).toBe(false);
+  });
+
+  /**
+   * O ESTADO PERSISTIDO DA RODADA CHEGANDO À TELA — o coração do #1040.
+   *
+   * O kit grava disputa/retentativas/passada nas três colunas do run; quem
+   * conta isso para quem clicou é ESTA rota. Se ela devolvesse só
+   * sucesso/falha (o `status`), a tela continuaria contando uma história mais
+   * simples que a acontecida — o aviso morreria no `.update.log`, no disco da
+   * VPS, exatamente como o issue descreve.
+   */
+  it("⭐ devolve a rodada do banco do run — disputa, retentativas e passada", async () => {
+    versionRow.current_version = "1.0.0";
+    runRow = {
+      id: "55555555-5555-4555-8555-555555555555",
+      status: "success",
+      last_step: "app",
+      dispatched_at: new Date().toISOString(),
+      from_version: "1.0.0",
+      to_version: "1.1.0",
+      log_tail: "deadlock detected … 2ª passada fechou",
+      disputa_de_banco: true,
+      retentativas_do_banco: 1,
+      passada_do_banco: 2,
+    };
+    vi.mocked(loadAuthUser).mockResolvedValue(OWNER as never);
+    const { GET } = await import("../version/route");
+    const body = await (await GET(get())).json();
+
+    expect(body.data.run.status).toBe("success");
+    expect(body.data.run.rodada_do_banco).toEqual({
+      disputa: true,
+      retentativas: 1,
+      passada: 2,
+    });
+  });
+
+  it("coluna nula é 'não medido': a rota devolve null, não zero", async () => {
+    // Rodada que não passou pelo banco (atualização só de código) deixa as três
+    // colunas nulas. `null` é o que mantém a tela calada; `0` viraria a frase
+    // "não houve disputa" para uma disputa que ninguém mediu.
+    versionRow.current_version = "1.0.0";
+    runRow = {
+      id: "55555555-5555-4555-8555-555555555555",
+      status: "success",
+      last_step: "codigo",
+      dispatched_at: new Date().toISOString(),
+      from_version: "1.0.0",
+      to_version: "1.1.0",
+      log_tail: "",
+      disputa_de_banco: null,
+      retentativas_do_banco: null,
+      passada_do_banco: null,
+    };
+    vi.mocked(loadAuthUser).mockResolvedValue(OWNER as never);
+    const { GET } = await import("../version/route");
+    const body = await (await GET(get())).json();
+
+    expect(body.data.run.rodada_do_banco).toBeNull();
   });
 
   it("depois de um rollback, quem não é dono também vê a versão que está no ar", async () => {
@@ -728,9 +763,20 @@ describe("POST /api/v1/system/update", () => {
   });
 
   it("nega para quem não é dono do servidor", async () => {
+    pa.row = null;
     vi.mocked(loadAuthUser).mockResolvedValue(MEMBRO as never);
     const { POST } = await import("../update/route");
     expect((await POST(post())).status).toBe(403);
+    expect(inserted).toBeNull();
+  });
+
+  it("nega o platform admin somente leitura (support_readonly) com forbidden_scope", async () => {
+    pa.row = { ...pa.row, scope: "support_readonly" };
+    vi.mocked(loadAuthUser).mockResolvedValue(OWNER as never);
+    const { POST } = await import("../update/route");
+    const res = await POST(post());
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("forbidden_scope");
     expect(inserted).toBeNull();
   });
 

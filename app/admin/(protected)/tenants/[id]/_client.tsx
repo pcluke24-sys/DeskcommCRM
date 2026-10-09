@@ -8,9 +8,10 @@ import { useT } from "@/hooks/i18n/useT";
 
 interface TenantOverviewClientProps {
   id: string;
+  cobrancaLigada?: boolean;
 }
 
-export function TenantOverviewClient({ id }: TenantOverviewClientProps) {
+export function TenantOverviewClient({ id, cobrancaLigada = false }: TenantOverviewClientProps) {
   const t = useT();
   const { data, isLoading, isError } = useTenantDetail(id);
 
@@ -45,16 +46,17 @@ export function TenantOverviewClient({ id }: TenantOverviewClientProps) {
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <TenantOverview organization={organization} counts={counts} integrations={integrations} />
+        <TenantOverview
+          organization={organization}
+          counts={counts}
+          integrations={integrations}
+          cobrancaLigada={cobrancaLigada}
+        />
         <TenantActions
           organizationId={organization.id}
           status={organization.status}
+          suspendedKind={organization.suspended_kind ?? null}
           displayName={organization.display_name}
-          aiModuleEnabled={organization.settings?.ai_module_enabled !== false}
-          onboardedAt={organization.onboarded_at}
-          slug={organization.slug}
-          canDeleteTenant={data.data.can_delete_tenant}
-          primaryOrganizationId={data.data.primary_organization_id ?? null}
         />
       </div>
     </div>

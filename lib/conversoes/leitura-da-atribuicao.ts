@@ -18,26 +18,19 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ehPlataformaConhecida } from "@/lib/plataformas-de-anuncio/registry";
-import type {
-  IdentidadeParaCorrespondencia,
-  PlataformaDeAnuncio,
-} from "@/lib/plataformas-de-anuncio/types";
+import type { PlataformaDeAnuncio } from "@/lib/plataformas-de-anuncio/types";
 
 export interface AtribuicaoParaEnvio {
   plataforma: PlataformaDeAnuncio;
-  /** `ad_source_id` — o `ctwa_clid`, quando o clique que abriu a conversa existe. */
-  cliqueDeOrigem: string | null;
+  /** `ad_source_id` — o `ctwa_clid`, o clique que abriu a conversa. */
+  cliqueDeOrigem: string;
   telefone: string | null;
-  identidade: IdentidadeParaCorrespondencia;
   identificadoresGoogle?: IdentificadoresGoogle;
 }
 
 export type LeituraDeAtribuicao =
   | { temAtribuicao: true; atribuicao: AtribuicaoParaEnvio }
-  | {
-      temAtribuicao: false;
-      motivo: "sem_contato" | "sem_telefone" | "sem_atribuicao" | "plataforma_desconhecida";
-    };
+  | { temAtribuicao: false; motivo: "sem_contato" | "sem_atribuicao" | "plataforma_desconhecida" };
 
 /**
  * ⚠️ FILTRA `organization_id` MESMO TENDO O ID DO CONTATO. O chamador é um
@@ -55,7 +48,7 @@ export async function lerAtribuicao(
 
   const { data, error } = await admin
     .from("contacts")
-    .select("phone_number, email, name, is_anonymized, source_metadata")
+    .select("phone_number, source_metadata")
     .eq("id", contactId)
     .eq("organization_id", organizationId)
     .maybeSingle();
@@ -63,44 +56,35 @@ export async function lerAtribuicao(
   if (error) throw new Error("Não foi possível ler a origem do contato.");
   if (!data) return { temAtribuicao: false, motivo: "sem_contato" };
 
-  const linha = data as {
-    phone_number: string | null;
-    email?: string | null;
-    name?: string | null;
-    is_anonymized?: boolean;
-    source_metadata: unknown;
-  };
-  if (linha.is_anonymized) return { temAtribuicao: false, motivo: "sem_contato" };
-  const telefone = linha.phone_number ? linha.phone_number.replace(/\D/g, "") || null : null;
-
+  const linha = data as { phone_number: string | null; source_metadata: unknown };
   const meta =
     linha.source_metadata && typeof linha.source_metadata === "object"
       ? (linha.source_metadata as Record<string, unknown>)
       : {};
 
   const clique = typeof meta.ad_source_id === "string" ? meta.ad_source_id.trim() : "";
-  const web =
-    meta.web_tracking && typeof meta.web_tracking === "object"
-      ? (meta.web_tracking as Record<string, unknown>)
-      : {};
-  const texto = (valor: unknown): string | undefined =>
-    typeof valor === "string" && valor.trim() ? valor.trim() : undefined;
-  const partes = linha.name?.trim().split(/\s+/) ?? [];
-  const identidade: IdentidadeParaCorrespondencia = {
-    identificadorExterno: `${organizationId}:${contactId}`,
-    email: texto(linha.email),
-    nome: partes[0] || undefined,
-    sobrenome: partes.length > 1 ? partes.slice(1).join(" ") : undefined,
-    identificadorDeCliqueWeb: texto(web.fbc ?? meta.fbc),
-    identificadorDoNavegador: texto(web.fbp ?? meta.fbp),
-    // IP e navegador so entram quando a origem web os registrou no contato.
-    ipDoContato: texto(web.client_ip_address),
-    agenteDoNavegadorDoContato: texto(web.client_user_agent),
-  };
-  // Se há clique, preservamos a plataforma que o originou. Sem clique, trata-se
-  // de conversão offline/CRM: o telefone identifica a pessoa e a conexão Meta
-  // da própria organização define o destino, sem inventar atribuição ao anúncio.
-  if (clique && !ehPlataformaConhecida(meta.ad_platform)) {
+  const telefone = linha.phone_number ? linha.phone_number.replace(/\D/g, "") || null : null;
+
+  // Quem chegou pela PÁGINA (link com código de origem) é carimbado `site`, sem
+  // clique. Se a UTM aponta para a Meta, a pessoa veio de um anúncio que levou à
+  // página — a venda é reportada à Meta pelo telefone, sem `ctwa_clid`. O
+  // transporte lê o `cliqueDeOrigem` vazio e troca a identidade do evento.
+  if (!clique && meta.ad_platform === "site" && utmDaMeta(meta.utm_source)) {
+    return {
+      temAtribuicao: true,
+      atribuicao: { plataforma: "meta_ads", cliqueDeOrigem: "", telefone },
+    };
+  }
+
+  // Sem o clique não há atribuição utilizável: é ele que liga a venda ao anúncio.
+  // Ter `ad_platform` sem `ad_source_id` acontece quando o payload trouxe o
+  // referral sem o identificador — a 0164 grava os dois como vieram.
+  if (!clique) return { temAtribuicao: false, motivo: "sem_atribuicao" };
+
+  // Plataforma que não está no vocabulário significa dado gravado por uma versão
+  // futura (ou corrompido). Recusar explicitamente é melhor que assumir a Meta e
+  // reportar a venda na conta errada.
+  if (!ehPlataformaConhecida(meta.ad_platform)) {
     return { temAtribuicao: false, motivo: "plataforma_desconhecida" };
   }
 
@@ -116,15 +100,29 @@ export async function lerAtribuicao(
   return {
     temAtribuicao: true,
     atribuicao: {
-      plataforma: ehPlataformaConhecida(meta.ad_platform)
-        ? meta.ad_platform
-        : "meta_ads",
-      cliqueDeOrigem: clique || null,
+      plataforma: meta.ad_platform,
       ...(ids ? { identificadoresGoogle: ids } : {}),
+      cliqueDeOrigem: clique,
       // Só dígitos: a plataforma exige E.164 sem `+` nem separadores ANTES do
       // hash. Normalizar depois do hash seria tarde — o hash já estaria errado.
       telefone,
-      identidade,
     },
   };
+}
+
+/**
+ * Os `utm_source` que significam "anúncio da Meta". Lista fechada e explícita:
+ * quem monta o link escolhe o texto, e casar por "contém face" pegaria
+ * `facebook_organico` e mandaria venda orgânica para a conta de anúncios.
+ */
+export const UTM_SOURCES_DA_META: ReadonlySet<string> = new Set([
+  "meta",
+  "facebook",
+  "fb",
+  "instagram",
+  "ig",
+]);
+
+function utmDaMeta(valor: unknown): boolean {
+  return typeof valor === "string" && UTM_SOURCES_DA_META.has(valor.trim().toLowerCase());
 }
