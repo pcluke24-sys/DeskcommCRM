@@ -63,3 +63,17 @@ Laço: GET retenta indisponibilidade; sessão inválida segue negada. Não há n
 peça arquitetural nem nova tabela; os caminhos de auth e Inbox existentes mudam.
 
 Não é declaração de incidente resolvido: nenhuma dessas alterações está na VPS.
+
+## Bloqueio externo da publicação e correção da esteira
+
+PR 12 / commit 2383f32ee: verify e build-and-size aprovados no Linux. Invariantes
+não chegaram ao banco por rate limit no pull de pgvector; imagens falharam com
+429/504 do Docker Hub. Prova negativa do agrupamento: retirar a guarda fez quatro
+dos cinco testes falharem; restaurar fez os cinco passarem novamente.
+
+Adicionado cache público mirror.gcr.io ao Docker e BuildKit da esteira. O cache
+respondia 200 para pgvector:pg17 e node:22-alpine na consulta de 09/10. Docker
+só é reconfigurado/reiniciado em runner efêmero github-hosted, nunca na VPS ou
+em executor persistente. Configuração anterior é preservada, sem credenciais.
+O cache pode falhar ou não ter determinada imagem; o fallback ao Docker Hub
+permanece. Não é garantia de disponibilidade. Nenhum gate foi removido.

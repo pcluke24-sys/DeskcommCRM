@@ -262,8 +262,14 @@ jobs:
           labels: |
             org.opencontainers.image.title=${{ matrix.title }}
 
+      - uses: ./.github/actions/preparar-registro
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Build e push (imagem genérica — sem segredos)
         uses: docker/build-push-action@v7
@@ -318,8 +324,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: ./.github/actions/preparar-registro
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Build local da imagem do app (sem push)
         uses: docker/build-push-action@v7
@@ -538,8 +550,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: ./.github/actions/preparar-registro
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Build local da imagem do worker (sem push)
         uses: docker/build-push-action@v7
