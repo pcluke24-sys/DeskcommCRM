@@ -56,8 +56,20 @@ export type PlataformaDeAnuncio = "meta_ads" | "google_ads";
 export type NomeDoEvento =
   | "Purchase"
   | "QualifiedLead"
+  | "Contact"
   | `Etapa:${string}`
   | `MetaEtapa:${string}`;
+
+export interface IdentidadeParaCorrespondencia {
+  identificadorExterno: string;
+  email?: string;
+  nome?: string;
+  sobrenome?: string;
+  identificadorDeCliqueWeb?: string;
+  identificadorDoNavegador?: string;
+  ipDoContato?: string;
+  agenteDoNavegadorDoContato?: string;
+}
 
 /**
  * Uma conversão pronta para sair — no formato da CASA, não no da plataforma.
@@ -89,12 +101,13 @@ export interface ConversaoOffline {
    * Vazio quando a pessoa chegou pela página com UTM da Meta: aí a identidade
    * é só o telefone, e o transporte declara a origem de acordo.
    */
-  cliqueDeOrigem: string;
+  cliqueDeOrigem: string | null;
   identificadoresGoogle?: IdentificadoresGoogle;
   /** E.164 sem `+`, ainda EM CLARO: o hash é responsabilidade do transporte. */
   telefone: string | null;
+  identidade?: IdentidadeParaCorrespondencia;
   valorCentavos: number | null;
-  moeda: string;
+  moeda: string | null;
   /**
    * O nome do evento NO FIO, quando ele não é o `evento` do livro-razão — o
    * evento padrão de uma regra de etapa da Meta (`InitiateCheckout`,

@@ -367,6 +367,25 @@ export const resolveActiveOrg = cache(async (authUser: AuthUser): Promise<Active
   return org;
 });
 
+/** Restringe controles da instalação ao dono dentro da organização principal. */
+export async function isPlatformOwnerInPrimaryOrg(authUser: AuthUser): Promise<boolean> {
+  if (!authUser.is_platform_admin || authUser.support) return false;
+  const ativa = await orgAtivaSemPortao(authUser);
+  if (!ativa) return false;
+  const { data, error } = await createAdminClient()
+    .from("platform_primary_organization")
+    .select("organization_id")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) {
+    logger.error("[auth] falha ao resolver organização principal da instalação", {
+      error: error.message,
+    });
+    return false;
+  }
+  return Boolean(data?.organization_id && data.organization_id === ativa.orgId);
+}
+
 /**
  * For Server Components / Server Actions in /app/(app)/* routes — guarantees
  * an authenticated user. Redirects to /login if not.

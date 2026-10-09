@@ -50780,3 +50780,490 @@ create unique index if not exists agent_inbox_budget_aberto_unico
 create unique index if not exists agent_inbox_budget_do_plano_aberto_unico
   on public.agent_inbox_items (organization_id)
   where status = 'open' and kind = 'budget_exceeded' and ref_kind = 'plano';
+
+-- ---- apêndice do fork: 20260916140000_9001_historico_do_funil.sql ----
+-- Histórico prospectivo: nenhuma leitura/backfill das etapas antigas.
+-- Fork 9001 (antigo 0261): timestamp e SQL preservados para instalações existentes.
+create table if not exists public.crm_funnel_tracking (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  enabled_since timestamptz not null default now()
+);
+create table if not exists public.crm_funnel_entries (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.crm_leads(id) on delete cascade,
+  pipeline_id uuid not null references public.crm_pipelines(id) on delete cascade,
+  stage_id uuid not null references public.crm_stages(id) on delete cascade,
+  kind text not null check (kind in ('created', 'stage', 'outcome')),
+  status text not null,
+  entered_at timestamptz not null default clock_timestamp()
+);
+create index if not exists crm_funnel_entries_period_idx
+  on public.crm_funnel_entries (organization_id, pipeline_id, entered_at);
+create index if not exists crm_funnel_entries_lead_idx
+  on public.crm_funnel_entries (organization_id, lead_id, stage_id, entered_at);
+alter table public.crm_funnel_tracking enable row level security;
+alter table public.crm_funnel_entries enable row level security;
+drop policy if exists crm_funnel_tracking_select on public.crm_funnel_tracking;
+create policy crm_funnel_tracking_select on public.crm_funnel_tracking for select to authenticated
+  using (organization_id in (select public.fn_user_org_ids()));
+drop policy if exists crm_funnel_entries_select on public.crm_funnel_entries;
+create policy crm_funnel_entries_select on public.crm_funnel_entries for select to authenticated
+  using (organization_id in (select public.fn_user_org_ids()) and exists (
+    select 1 from public.crm_leads l where l.id = lead_id and l.organization_id = crm_funnel_entries.organization_id
+  ));
+revoke all on public.crm_funnel_tracking, public.crm_funnel_entries from public, anon, authenticated, service_role;
+grant select on public.crm_funnel_tracking, public.crm_funnel_entries to authenticated, service_role;
+-- Só grava o início da coleta; não cria entradas para leads existentes.
+insert into public.crm_funnel_tracking (organization_id)
+  select id from public.organizations on conflict do nothing;
+
+create or replace function public.fn_record_funnel_entry() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_kind text;
+begin
+  if tg_op = 'INSERT' then v_kind := 'created';
+  elsif new.stage_id is distinct from old.stage_id or new.pipeline_id is distinct from old.pipeline_id then v_kind := 'stage';
+  elsif new.status is distinct from old.status then v_kind := 'outcome';
+  else return new;
+  end if;
+  if not exists (select 1 from public.crm_stages s where s.id = new.stage_id
+      and s.organization_id = new.organization_id and s.pipeline_id = new.pipeline_id) then
+    return new;
+  end if;
+  insert into public.crm_funnel_tracking (organization_id) values (new.organization_id) on conflict do nothing;
+  insert into public.crm_funnel_entries (organization_id, lead_id, pipeline_id, stage_id, kind, status)
+    values (new.organization_id, new.id, new.pipeline_id, new.stage_id, v_kind, new.status);
+  return new;
+end;
+$$;
+revoke execute on function public.fn_record_funnel_entry() from public, anon, authenticated, service_role;
+drop trigger if exists crm_record_funnel_entry on public.crm_leads;
+create trigger crm_record_funnel_entry after insert or update of stage_id, pipeline_id, status
+  on public.crm_leads for each row execute function public.fn_record_funnel_entry();
+
+create or replace function public.fn_funnel_history(p_org uuid, p_pipeline uuid, p_from timestamptz, p_to timestamptz)
+returns jsonb language sql stable security invoker set search_path = public as $$
+  with entries as materialized (
+    select e.* from public.crm_funnel_entries e
+    join public.crm_leads l on l.id = e.lead_id and l.organization_id = e.organization_id
+    where e.organization_id = p_org and e.pipeline_id = p_pipeline
+      and e.entered_at >= p_from and e.entered_at < p_to
+  ), visits as materialized (select * from entries where kind <> 'outcome'),
+  stages as (
+    select s.id, s.name, s.position, s.is_won, s.is_lost,
+      (select n.id from public.crm_stages n where n.organization_id = p_org
+       and n.pipeline_id = p_pipeline and not n.is_lost and not n.is_archived
+       and n.position > s.position order by n.position, n.id limit 1) as next_stage_id
+    from public.crm_stages s where s.organization_id = p_org and s.pipeline_id = p_pipeline
+      and (not s.is_archived or exists (select 1 from visits v where v.stage_id = s.id))
+  ), counts as (
+    select s.*, (select count(distinct v.lead_id) from visits v where v.stage_id = s.id) as leads,
+      (select count(*) from visits v where v.stage_id = s.id) as entries,
+      case when s.is_lost or s.is_won or s.next_stage_id is null then null else
+        (select count(distinct v.lead_id) from visits v where v.stage_id = s.id and exists (
+          select 1 from visits n where n.lead_id = v.lead_id and n.stage_id = s.next_stage_id
+            and n.entered_at > v.entered_at
+        )) end as advanced
+    from stages s
+  )
+  select jsonb_build_object(
+    'enabled_since', (select enabled_since from public.crm_funnel_tracking where organization_id = p_org),
+    'totals', jsonb_build_object(
+      'leads', (select count(distinct lead_id) from entries),
+      'received', (select count(distinct lead_id) from entries where kind = 'created'),
+      'won', (select count(distinct lead_id) from entries where status = 'won'),
+      'lost', (select count(distinct lead_id) from entries where status = 'lost')
+    ),
+    'stages', coalesce((select jsonb_agg(jsonb_build_object(
+      'id', id, 'name', name, 'leads', leads, 'entries', entries,
+      'is_won', is_won, 'is_lost', is_lost, 'next_stage_id', next_stage_id, 'advanced', advanced,
+      'advance_rate', case when leads > 0 and advanced is not null then round(100.0 * advanced / leads, 1) else null end
+    ) order by position, id) from counts), '[]'::jsonb)
+  );
+$$;
+revoke execute on function public.fn_funnel_history(uuid, uuid, timestamptz, timestamptz) from public, anon;
+grant execute on function public.fn_funnel_history(uuid, uuid, timestamptz, timestamptz) to authenticated, service_role;
+notify pgrst, 'reload schema';
+
+
+-- ---- apêndice do fork: 20260916150000_9002_atribuicao_no_historico_do_funil.sql ----
+-- Histórico prospectivo por origem. Não cria nem reinterpreta entradas antigas.
+-- Fork 9002 (antigo 0262): timestamp e SQL preservados para instalações existentes.
+create or replace function public.fn_funnel_attribution_history(
+  p_org uuid,
+  p_pipeline uuid,
+  p_from timestamptz,
+  p_to timestamptz,
+  p_group_by text
+)
+returns jsonb language sql stable security invoker set search_path = public as $$
+  with entries as materialized (
+    select e.lead_id, e.stage_id,
+      case p_group_by
+        when 'utm_source' then coalesce(nullif(l.source_metadata->>'utm_source', ''), 'sem_utm_source')
+        when 'utm_campaign' then coalesce(nullif(l.source_metadata->>'utm_campaign', ''), 'sem_utm_campaign')
+        when 'ad_reference' then coalesce(nullif(l.source_metadata->>'ad_source_id', ''), 'sem_referencia_de_anuncio')
+        else coalesce(nullif(l.source, ''), 'sem_origem')
+      end as group_key,
+      nullif(l.source_metadata->>'ad_title', '') as ad_title
+    from public.crm_funnel_entries e
+    join public.crm_leads l on l.id = e.lead_id and l.organization_id = e.organization_id
+    where e.organization_id = p_org and e.pipeline_id = p_pipeline
+      and e.entered_at >= p_from and e.entered_at < p_to and e.kind <> 'outcome'
+  ), stages as (
+    select s.id, s.name, s.position, s.is_won, s.is_lost
+    from public.crm_stages s
+    where s.organization_id = p_org and s.pipeline_id = p_pipeline
+      and (not s.is_archived or exists (select 1 from entries e where e.stage_id = s.id))
+  ), counts as (
+    select e.group_key, max(e.ad_title) as ad_title, e.stage_id, count(distinct e.lead_id) as leads
+    from entries e group by e.group_key, e.stage_id
+  ), groups as (
+    select group_key, max(ad_title) as ad_title,
+      jsonb_object_agg(stage_id::text, leads) as stage_counts
+    from counts group by group_key
+  )
+  select jsonb_build_object(
+    'enabled_since', (select enabled_since from public.crm_funnel_tracking where organization_id = p_org),
+    'group_by', p_group_by,
+    'stages', coalesce((select jsonb_agg(jsonb_build_object(
+      'id', id, 'name', name, 'is_won', is_won, 'is_lost', is_lost
+    ) order by position, id) from stages), '[]'::jsonb),
+    'groups', coalesce((select jsonb_agg(jsonb_build_object(
+      'key', group_key, 'ad_title', ad_title, 'stage_counts', stage_counts
+    ) order by group_key) from groups), '[]'::jsonb)
+  );
+$$;
+revoke execute on function public.fn_funnel_attribution_history(uuid, uuid, timestamptz, timestamptz, text) from public, anon;
+grant execute on function public.fn_funnel_attribution_history(uuid, uuid, timestamptz, timestamptz, text) to authenticated, service_role;
+notify pgrst, 'reload schema';
+
+
+-- ---- apêndice do fork: 20260917170000_9003_excluir_tenant_suspenso.sql ----
+-- Exclusão exclusivamente pelo dono original da instalação; transacional.
+-- Fork 9003 (antigo 0265): timestamp e SQL preservados para instalações existentes.
+create table if not exists public.platform_tenant_deletion_storage (
+  id uuid primary key default gen_random_uuid(),
+  deleted_organization_id uuid not null,
+  bucket text not null,
+  object_path text not null,
+  status text not null default 'pending' check (status in ('pending','deleted','failed')),
+  attempts integer not null default 0,
+  error_message text,
+  created_at timestamptz not null default now(),
+  processed_at timestamptz,
+  unique (bucket, object_path),
+  check (starts_with(object_path, deleted_organization_id::text || '/'))
+);
+-- Fila da plataforma: propositalmente SEM FK para sobreviver ao DELETE do tenant.
+alter table public.platform_tenant_deletion_storage enable row level security;
+revoke all on public.platform_tenant_deletion_storage from public, anon, authenticated;
+grant select, insert, update, delete on public.platform_tenant_deletion_storage to service_role;
+
+create or replace function public.fn_tenant_deletion_owner(p_actor uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from platform_admins
+    where user_id = p_actor and revoked_at is null and scope = 'full'
+      and user_id = (
+        select user_id from platform_admins where granted_by = user_id and scope = 'full'
+        order by granted_at, user_id limit 1
+      )
+  );
+$$;
+revoke execute on function public.fn_tenant_deletion_owner(uuid) from public, anon, authenticated;
+grant execute on function public.fn_tenant_deletion_owner(uuid) to service_role;
+
+create or replace function public.fn_delete_suspended_tenant(
+  p_org uuid, p_actor uuid, p_confirmation text, p_reason text, p_request_id uuid
+) returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  target organizations%rowtype;
+  media_count integer;
+begin
+  if not fn_tenant_deletion_owner(p_actor) then
+    raise exception 'Somente o dono da instalação pode excluir tenants.' using errcode = '42501';
+  end if;
+  select * into target from organizations where id = p_org for update;
+  if not found then raise exception 'Tenant não encontrado.' using errcode = 'P0002'; end if;
+  if target.status <> 'suspended' then
+    raise exception 'Suspenda o tenant antes de excluir.' using errcode = 'P0001';
+  end if;
+  if p_confirmation is distinct from target.slug or length(trim(coalesce(p_reason,''))) < 10
+     or length(p_reason) > 500 then
+    raise exception 'Confirme o identificador e informe o motivo da exclusão.' using errcode = '22023';
+  end if;
+  if exists (select 1 from user_organizations where organization_id = p_org and user_id = p_actor) then
+    raise exception 'Não é permitido excluir sua própria organização.' using errcode = 'P0001';
+  end if;
+  -- Não deixa conexões remotas órfãs: primeiro encerrar pela tela de Conexões.
+  if exists (select 1 from channel_sessions where organization_id = p_org)
+     or exists (select 1 from calendar_connections where organization_id = p_org and status <> 'disconnected')
+     or exists (select 1 from tenant_integrations where organization_id = p_org and status <> 'disconnected') then
+    raise exception 'Remova as sessões de WhatsApp e desconecte as integrações antes de excluir.' using errcode = 'P0001';
+  end if;
+  -- Só arquivos no prefixo UUID exato. Nunca platform/, usuários ou outros tenants.
+  insert into platform_tenant_deletion_storage (deleted_organization_id, bucket, object_path)
+    select p_org, bucket_id, name from storage.objects
+    where starts_with(name, p_org::text || '/')
+    on conflict (bucket, object_path) do update set
+      status = 'pending', attempts = 0, error_message = null, processed_at = null;
+  get diagnostics media_count = row_count;
+  delete from organizations where id = p_org and status = 'suspended';
+  -- Sobrevive ao cascade; não apaga contas Auth que podem participar de outros tenants.
+  insert into api_audit_log (
+    actor_user_id, acting_as_platform_admin, action, resource_type, resource_id,
+    request_id, bypassed_rls, metadata
+  ) values (
+    p_actor, true, 'tenant.deleted', 'organization', p_org, p_request_id, true,
+    jsonb_build_object('tenant_id', p_org, 'tenant_slug', target.slug,
+      'reason', p_reason, 'storage_pending', media_count)
+  );
+  return jsonb_build_object('id', p_org, 'storage_pending', media_count);
+end;
+$$;
+revoke execute on function public.fn_delete_suspended_tenant(uuid,uuid,text,text,uuid) from public, anon, authenticated;
+grant execute on function public.fn_delete_suspended_tenant(uuid,uuid,text,text,uuid) to service_role;
+notify pgrst, 'reload schema';
+
+
+-- ---- apêndice do fork: 20260917180000_9004_organizacao_principal.sql ----
+-- Organização principal única da instalação; somente o dono pode configurar.
+-- Fork 9004 (antigo 0266): timestamp e SQL preservados para instalações existentes.
+create table if not exists public.platform_primary_organization (
+  id integer primary key default 1 check (id = 1),
+  organization_id uuid references public.organizations(id) on delete restrict,
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+alter table public.platform_primary_organization enable row level security;
+revoke all on public.platform_primary_organization from public, anon, authenticated;
+grant select on public.platform_primary_organization to service_role;
+insert into public.platform_primary_organization(id) values(1) on conflict(id) do nothing;
+
+create or replace function public.fn_set_primary_organization(p_org uuid, p_actor uuid, p_request_id uuid)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare prior uuid;
+begin
+  if not fn_tenant_deletion_owner(p_actor) then
+    raise exception 'Somente o dono da instalação pode definir a organização principal.' using errcode='42501';
+  end if;
+  select organization_id into prior from platform_primary_organization where id=1 for update;
+  perform 1 from organizations where id=p_org and status='active' for update;
+  if not found then raise exception 'A organização principal precisa estar ativa.' using errcode='P0001'; end if;
+  update platform_primary_organization set organization_id=p_org, updated_by=p_actor, updated_at=now() where id=1;
+  if prior is distinct from p_org then
+    insert into api_audit_log(actor_user_id,acting_as_platform_admin,action,resource_type,resource_id,request_id,bypassed_rls,metadata)
+    values(p_actor,true,'platform.primary_organization_updated','organization',p_org,p_request_id,true,jsonb_build_object('previous_organization_id',prior,'organization_id',p_org));
+  end if;
+  return jsonb_build_object('primary_organization_id',p_org);
+end;
+$$;
+revoke execute on function public.fn_set_primary_organization(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.fn_set_primary_organization(uuid,uuid,uuid) to service_role;
+
+create or replace function public.fn_delete_suspended_tenant(
+  p_org uuid, p_actor uuid, p_confirmation text, p_reason text, p_request_id uuid
+) returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  target organizations%rowtype;
+  media_count integer;
+  principal uuid;
+begin
+  if not fn_tenant_deletion_owner(p_actor) then
+    raise exception 'Somente o dono da instalação pode excluir tenants.' using errcode = '42501';
+  end if;
+  select organization_id into principal from platform_primary_organization where id=1 for update;
+  if principal is null then
+    raise exception 'Defina sua organização principal antes de excluir tenants.' using errcode='P0001';
+  end if;
+  if principal = p_org then
+    raise exception 'Não é permitido excluir a organização principal da instalação.' using errcode='P0001';
+  end if;
+  select * into target from organizations where id = p_org for update;
+  if not found then raise exception 'Tenant não encontrado.' using errcode = 'P0002'; end if;
+  if target.status <> 'suspended' then
+    raise exception 'Suspenda o tenant antes de excluir.' using errcode = 'P0001';
+  end if;
+  if p_confirmation is distinct from target.slug or length(trim(coalesce(p_reason,''))) < 10
+     or length(p_reason) > 500 then
+    raise exception 'Confirme o identificador e informe o motivo da exclusão.' using errcode = '22023';
+  end if;
+  -- Não deixa conexões remotas órfãs: primeiro encerrar pela tela de Conexões.
+  if exists (select 1 from channel_sessions where organization_id = p_org)
+     or exists (select 1 from calendar_connections where organization_id = p_org and status <> 'disconnected')
+     or exists (select 1 from tenant_integrations where organization_id = p_org and status <> 'disconnected') then
+    raise exception 'Remova as sessões de WhatsApp e desconecte as integrações antes de excluir.' using errcode = 'P0001';
+  end if;
+  -- Só arquivos no prefixo UUID exato. Nunca platform/, usuários ou outros tenants.
+  insert into platform_tenant_deletion_storage (deleted_organization_id, bucket, object_path)
+    select p_org, bucket_id, name from storage.objects
+    where starts_with(name, p_org::text || '/')
+    on conflict (bucket, object_path) do update set
+      status = 'pending', attempts = 0, error_message = null, processed_at = null;
+  get diagnostics media_count = row_count;
+  delete from organizations where id = p_org and status = 'suspended';
+  -- Sobrevive ao cascade; não apaga contas Auth que podem participar de outros tenants.
+  insert into api_audit_log (
+    actor_user_id, acting_as_platform_admin, action, resource_type, resource_id,
+    request_id, bypassed_rls, metadata
+  ) values (
+    p_actor, true, 'tenant.deleted', 'organization', p_org, p_request_id, true,
+    jsonb_build_object('tenant_id', p_org, 'tenant_slug', target.slug,
+      'reason', p_reason, 'storage_pending', media_count)
+  );
+  return jsonb_build_object('id', p_org, 'storage_pending', media_count);
+end;
+$$;
+revoke execute on function public.fn_delete_suspended_tenant(uuid,uuid,text,text,uuid) from public, anon, authenticated;
+grant execute on function public.fn_delete_suspended_tenant(uuid,uuid,text,text,uuid) to service_role;
+notify pgrst, 'reload schema';
+
+
+-- ---- apêndice do fork: 20260917223000_9005_principal_somente_por_rpc.sql ----
+-- Fecha grants herdados de ALTER DEFAULT PRIVILEGES em instalações novas.
+-- A escrita da principal continua somente pelas RPCs auditadas do dono.
+revoke all on public.platform_primary_organization from public, anon, authenticated, service_role;
+grant select on public.platform_primary_organization to service_role;
+
+
+-- ---- apêndice do fork: 20260924173000_0398_exclusao_atomica_do_contato.sql ----
+-- A exclusao de um contato com job de follow-up falhava no CASCADE:
+-- `trg_followup_generation_job` via auth.uid() e recusava o DELETE interno
+-- como se o operador estivesse adulterando a fila diretamente. Pior: a rota
+-- ja tinha apagado mensagens e conversas em requisicoes separadas quando a
+-- ficha falhava, deixando a operacao pela metade.
+--
+-- A funcao abaixo e a unica porta atomica. Ela valida agent+ na propria
+-- transacao, liga uma marca local que somente este SECURITY DEFINER pode usar,
+-- remove historico e ficha no mesmo commit e deixa o CASCADE limpar a fila.
+-- A protecao original continua recusando escrita direta em followup_turn.
+
+create or replace function public.fn_delete_contact_atomic(
+  p_organization_id uuid,
+  p_contact_id uuid
+) returns uuid
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+  v_deleted uuid;
+  v_jwt_role text := coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb->>'role'
+  );
+begin
+  if v_jwt_role is distinct from 'service_role'
+     and (auth.uid() is null or not public.fn_role_at_least(p_organization_id, 'agent')) then
+    raise exception 'forbidden' using errcode='42501';
+  end if;
+
+  -- Marca LOCAL a esta transacao. O gatilho continua fechado em qualquer
+  -- DELETE direto de job_queue feito pelo mesmo usuario.
+  perform set_config('deskcomm.exclusao_contato', 'on', true);
+
+  delete from public.messages
+   where organization_id=p_organization_id and contact_id=p_contact_id;
+  delete from public.conversations
+   where organization_id=p_organization_id and contact_id=p_contact_id;
+  delete from public.contacts
+   where organization_id=p_organization_id and id=p_contact_id
+   returning id into v_deleted;
+
+  return v_deleted;
+end;
+$$;
+
+revoke execute on function public.fn_delete_contact_atomic(uuid,uuid) from public,anon;
+grant execute on function public.fn_delete_contact_atomic(uuid,uuid) to authenticated,service_role;
+
+
+-- ---- apêndice do fork: 20260925121000_0399_cascata_eventos_followup_ao_excluir_contato.sql ----
+-- A correção histórica desta migration já foi incorporada e posteriormente
+-- endurecida pelas migrations 0488 e 0501. O baseline mantém a ÚLTIMA
+-- definição da cadeia; não pode reaplicar aqui o corpo antigo da guarda.
+
+
+-- ---- apêndice do fork: 20260929214500_0492_garante_despacho_do_agente.sql ----
+-- 0492 — uma mensagem de entrada não pode existir sem a chance de resposta.
+--
+-- O INSERT da mensagem e o evento do agente são duas escritas. Antes, se a
+-- segunda falhasse, a primeira ficava gravada; a reentrega encontrava 23505 e
+-- deliberadamente não despachava de novo. Resultado: Inbox atualizada, agente
+-- mudo, e o follow-up (pipeline separado) aparecendo minutos depois.
+--
+-- Esta função transforma o despacho em ENSURE idempotente. A trava transacional
+-- fecha a corrida entre duas reentregas, e a própria mensagem fornece todos os
+-- ids do payload — o chamador não pode misturar contato/conversa/sessão.
+
+create or replace function public.fn_garantir_despacho_agente(
+  p_organization_id uuid,
+  p_message_id uuid,
+  p_source text,
+  p_request_id text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $function$
+declare
+  v_message public.messages%rowtype;
+  v_event_id uuid;
+begin
+  if p_organization_id is null or p_message_id is null then
+    raise exception 'dispatch_requires_org_and_message' using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text || ':' || p_message_id::text, 0));
+
+  select * into v_message
+    from public.messages
+   where organization_id = p_organization_id
+     and id = p_message_id
+     and direction = 'inbound';
+  if not found then
+    raise exception 'inbound_message_not_found_for_org' using errcode = 'P0001';
+  end if;
+
+  select id into v_event_id
+    from public.event_log
+   where organization_id = p_organization_id
+     and event_type = 'ai_agent.dispatch_requested'
+     and entity_kind = 'message'
+     and entity_id = p_message_id
+   order by created_at asc, id asc
+   limit 1;
+
+  if v_event_id is null then
+    insert into public.event_log
+      (organization_id, event_type, entity_kind, entity_id, payload, metadata)
+    values (
+      p_organization_id,
+      'ai_agent.dispatch_requested',
+      'message',
+      p_message_id,
+      jsonb_build_object(
+        'organization_id', p_organization_id,
+        'conversation_id', v_message.conversation_id,
+        'contact_id', v_message.contact_id,
+        'channel_session_id', v_message.channel_session_id,
+        'inbound_message_id', p_message_id
+      ),
+      jsonb_strip_nulls(jsonb_build_object(
+        'source', coalesce(nullif(p_source, ''), 'inbound_webhook'),
+        'request_id', p_request_id,
+        'emitted_at', extract(epoch from now())
+      ))
+    ) returning id into v_event_id;
+  end if;
+
+  return v_event_id;
+end
+$function$;
+
+revoke all on function public.fn_garantir_despacho_agente(uuid, uuid, text, text) from public, anon, authenticated;
+grant execute on function public.fn_garantir_despacho_agente(uuid, uuid, text, text) to service_role;
+
+notify pgrst, 'reload schema';

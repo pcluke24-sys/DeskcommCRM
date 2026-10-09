@@ -32,6 +32,7 @@ import {
 } from "@/hooks/inbox/useCloseConversation";
 import { useResumeAiAttendance } from "@/hooks/inbox/useResumeAiAttendance";
 import { usePauseAiAttendance } from "@/hooks/inbox/usePauseAiAttendance";
+import { useMarkAsUnread } from "@/hooks/inbox/useMarkAsUnread";
 import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
 import { OwnerBadge } from "@/components/kanban/OwnerBadge";
 import { comandoDaConversa, ROTULO_DO_MOTIVO } from "@/lib/inbox/comando-da-conversa";
@@ -57,6 +58,8 @@ interface Props {
   botaoBuscaRef?: RefObject<HTMLButtonElement | null>;
   /** Seleciona outra conversa no Inbox — a aba Número do Transferir abre a do outro número. */
   onAbrirConversa?: (id: string) => void;
+  /** Fecha o painel depois de devolver a conversa para a fila de não lidas. */
+  onMarkedUnread?: () => void;
 }
 
 /**
@@ -91,6 +94,7 @@ export function ConversationHeader({
   onBuscar,
   buscaAberta,
   botaoBuscaRef,
+  onMarkedUnread,
 }: Props) {
   const t = useT();
   const { user, activeOrg } = useAuth();
@@ -101,6 +105,7 @@ export function ConversationHeader({
   const arquivar = useArchiveConversation();
   const retomar = useResumeAiAttendance();
   const pausar = usePauseAiAttendance();
+  const marcarNaoLida = useMarkAsUnread();
   // "Existe automático nesta org?" — sem isto o selo afirmava que o robô estava
   // atendendo em instalação que nunca configurou agente nenhum.
   const automaticoDaOrg = useAutomaticoAtivo();
@@ -426,6 +431,20 @@ export function ConversationHeader({
             snoozeUntil={conversation.snooze_until ?? null}
           />
         )}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={marcarNaoLida.isPending}
+          data-testid="marcar-como-nao-lida"
+          title={t("Devolve esta conversa para a lista de não lidas sem alterar as mensagens.")}
+          onClick={() =>
+            marcarNaoLida.mutate(conversation.id, {
+              onSuccess: () => onMarkedUnread?.(),
+            })
+          }
+        >
+          {marcarNaoLida.isPending ? t("Marcando...") : t("Marcar como não lida")}
+        </Button>
         {!encerrada && (
           <Button
             size="sm"

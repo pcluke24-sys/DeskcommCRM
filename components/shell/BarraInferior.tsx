@@ -109,6 +109,7 @@ export function BarraInferior() {
     activeOrg?.role ?? null,
     activeOrg?.interface_settings,
     activeOrg?.modulos_ligados ?? [],
+    activeOrg?.ai_module_enabled !== false,
     activeOrg?.capacidades_ligadas ?? [],
   )) {
     for (const item of items) visiveis.set(item.href, item);

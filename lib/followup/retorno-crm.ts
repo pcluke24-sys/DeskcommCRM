@@ -123,6 +123,7 @@ export function criaRetornoDbSupabase(admin: SupabaseClient): RetornoDb {
             payload: job.payload,
             cancelled_at: null,
             cancel_reason: null,
+            last_error: null,
           })
         : null;
     },

@@ -9,7 +9,7 @@
  *
  * Três classes que só aparecem deste lado do seam:
  *
- * 1. config ligada + humano → o canal recebe `*Nome*\noi` e o banco guarda `oi`;
+ * 1. config ligada + humano → o canal recebe `*Nome:*\noi` e o banco guarda `oi`;
  * 2. config ligada + humano → desligada → o canal recebe `oi` (opt-in de verdade);
  * 3. a origem determina a assinatura: automação (webhook_source sem IA) não é
  *    assinada mesmo com config ligada.
@@ -125,7 +125,7 @@ afterEach(() => {
 });
 
 describe("a assinatura sai pela cadeia de envio, sem poluir messages.body", () => {
-  it("humano com config ligada: o canal recebe `*Nome*\\noi`, o banco guarda `oi`", async () => {
+  it("humano com config ligada: o canal recebe `*Nome:*\\noi`, o banco guarda `oi`", async () => {
     mockedNomes.mockResolvedValue(new Map([[USER, "carlos gaban"]]));
     vi.stubEnv("ZERNIO_ACCOUNT_ID", CONTA);
     vi.stubEnv("ZERNIO_API_KEY", "sk_env");
@@ -140,7 +140,7 @@ describe("a assinatura sai pela cadeia de envio, sem poluir messages.body", () =
 
     expect(msg.status).toBe("sent");
     expect(mensagemEnviadoNaRede(fetchMock)).toEqual(
-      expect.objectContaining({ message: "*Carlos Gaban*\noi" }),
+      expect.objectContaining({ message: "*Carlos Gaban:*\noi" }),
     );
     expect(capturas.inserts.messages!.at(-1)?.["body"]).toBe("oi");
   });

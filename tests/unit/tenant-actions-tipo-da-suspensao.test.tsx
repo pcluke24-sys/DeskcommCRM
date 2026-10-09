@@ -11,6 +11,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/components/admin/tenants/SuspendDialog", () => ({ SuspendDialog: () => null }));
 vi.mock("@/components/admin/tenants/ReactivateDialog", () => ({ ReactivateDialog: () => null }));
 vi.mock("@/components/admin/ImpersonateButton", () => ({ ImpersonateButton: () => null }));
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
 
 import { TenantActions } from "@/components/admin/tenants/TenantActions";
 

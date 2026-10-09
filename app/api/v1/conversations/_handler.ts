@@ -665,3 +665,39 @@ export async function markConversationReadHandler(
   }
   return data as unknown as Conversation;
 }
+
+/**
+ * Devolve uma conversa lida para a fila visual de não lidas.
+ *
+ * O contador representa a pendência do atendente, não uma alteração no
+ * conteúdo das mensagens. Um único marcador basta: mensagens inbound futuras
+ * continuam incrementando normalmente e uma resposta outbound continua
+ * zerando pela regra central do banco.
+ */
+export async function markConversationUnreadHandler(
+  supabase: SB,
+  ctx: HandlerCtx,
+  conversationId: string,
+): Promise<Conversation> {
+  const { data, error } = await supabase
+    .from("conversations")
+    .update({ unread_count_for_assignee: 1 })
+    .eq("id", conversationId)
+    .eq("organization_id", ctx.organization_id)
+    .select(SELECT_COLS)
+    .maybeSingle();
+
+  if (error) {
+    throw new ApiError(500, "internal_error", undefined, ctx.requestId, error.message);
+  }
+  if (!data) {
+    throw new ApiError(
+      404,
+      "not_found",
+      undefined,
+      ctx.requestId,
+      traduzir("Conversa não encontrada.", ctx.idioma ?? "pt-BR"),
+    );
+  }
+  return data as unknown as Conversation;
+}

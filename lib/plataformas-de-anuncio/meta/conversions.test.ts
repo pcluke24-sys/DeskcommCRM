@@ -101,7 +101,7 @@ describe("transporte Meta", () => {
 
     expect(resultado).toEqual({
       tipo: "permanente",
-      detalhe: "Este transporte aceita apenas compras com valor.",
+      detalhe: "Este transporte aceita compras com valor ou eventos de etapa com o nome da Meta.",
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

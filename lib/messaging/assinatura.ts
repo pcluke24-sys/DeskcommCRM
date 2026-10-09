@@ -2,7 +2,7 @@
  * Assinatura do emissor nas mensagens enviadas ao cliente (issue #2066).
  *
  * Quando uma mensagem é enviada ao WhatsApp, quem fala aparece em negrito na
- * linha de cima (`*Nome*\n`), com o texto logo abaixo — para o cliente saber
+ * linha de cima (`*Nome:*\n`), com o texto logo abaixo — para o cliente saber
  * com quem está falando quando a conversa passa de um atendente para outro ou
  * para a IA.
  *
@@ -81,7 +81,7 @@ export function capitalizarIniciais(nome: string): string {
 }
 
 /**
- * A linha de assinatura em negrito (`*Nome*\n`) que abre o que vai ao canal,
+ * A linha de assinatura em negrito (`*Nome:*\n`) que abre o que vai ao canal,
  * ou `null` quando não há o que assinar (config desligada para esta origem, ou
  * — no humano — o nome não pôde ser resolvido).
  *
@@ -102,7 +102,7 @@ export function linhaDeAssinatura(
   if (!config.humanos) return null;
   const nome = nomeHumano?.trim();
   if (!nome) return null;
-  return `*${capitalizarIniciais(nome)}*\n`;
+  return `*${capitalizarIniciais(nome)}:*\n`;
 }
 
 /**
@@ -120,7 +120,7 @@ export function aplicarAssinatura(
 
 /**
  * O que a porta de Configurações aceita gravar. O nome da IA não leva `*` nem
- * quebra de linha: qualquer um dos dois desmonta a linha `*Nome*\n` — o
+ * quebra de linha: qualquer um dos dois desmonta a linha `*Nome:*\n` — o
  * negrito sai torto para o cliente e `semAssinatura` deixa de reconhecê-la.
  */
 export const assinaturaEntradaSchema = z
@@ -141,7 +141,7 @@ const LINHA_DE_ASSINATURA = /^\*[^*\n]+\*\n/;
 /**
  * O texto sem a linha de assinatura do começo, se houver. Quem precisa é a
  * guarda de eco da ingestão do canal: o eco devolve o que SAIU
- * (`*Nome*\ntexto`), e `messages.body` guarda só `texto`.
+ * (`*Nome:*\ntexto`), e `messages.body` guarda só `texto`.
  */
 export function semAssinatura(texto: string): string {
   return texto.replace(LINHA_DE_ASSINATURA, "");

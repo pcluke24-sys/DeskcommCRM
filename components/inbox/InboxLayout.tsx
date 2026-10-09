@@ -701,6 +701,7 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
               key={selectedConversation.id}
               conversation={selectedConversation}
               onAbrirConversa={handleSelect}
+              onMarkedUnread={() => handleSelect(null)}
               onBuscar={() =>
                 buscaAberta
                   ? fecharBusca()

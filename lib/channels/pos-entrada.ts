@@ -58,6 +58,7 @@ import { acelerarFollowupDoInbound, drenarEventosDoInbound } from "@/lib/dev/kic
 import { origemDoNegocioPeloCanal } from "@/lib/channels/origem-do-negocio";
 import { autorizarContatoParaIA } from "@/lib/ai/elegibilidade/autorizacao";
 import { casarCampanha, lerCampanhas } from "@/lib/ai/elegibilidade/campanha";
+import { lancarFalhaDeIngestao } from "@/lib/waha/falha-transitoria";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -487,28 +488,25 @@ async function pedirDespachoDoAgente(admin: Admin, entrada: EntradaDeMensagem): 
     });
   }
 
-  const { error } = await admin.rpc("emit_event" as never, {
-    p_event_type: "ai_agent.dispatch_requested",
-    p_entity_kind: "message",
-    p_entity_id: entrada.messageId,
-    p_payload: {
-      organization_id: entrada.organizationId,
-      conversation_id: entrada.conversationId,
-      contact_id: entrada.contactId,
-      channel_session_id: entrada.channelSessionId,
-      inbound_message_id: entrada.messageId,
-    },
-    p_metadata: { source: entrada.origem, request_id: entrada.requestId },
+  // A RPC é um ENSURE idempotente: se a mensagem já foi persistida e o
+  // processo caiu antes do evento, a reentrega cria o despacho ausente; se o
+  // evento já existe, apenas devolve o mesmo id. É a proteção do fork contra a
+  // IA ficar muda depois de uma falha transitória entre essas duas escritas.
+  const { error } = await admin.rpc("fn_garantir_despacho_agente" as never, {
     p_organization_id: entrada.organizationId,
+    p_message_id: entrada.messageId,
+    p_source: entrada.origem,
+    p_request_id: entrada.requestId ?? null,
   } as never);
 
   if (error) {
-    logger.warn("pos-entrada: emit ai_agent.dispatch_requested falhou", {
+    logger.error("pos-entrada: despacho do agente não foi garantido — pedindo reentrega", {
       organization_id: entrada.organizationId,
       message_id: entrada.messageId,
       origem: entrada.origem,
       detail: error.message.slice(0, 160),
     });
+    lancarFalhaDeIngestao("fn_garantir_despacho_agente", error);
   }
 }
 

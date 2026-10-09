@@ -45,6 +45,7 @@
  * devolve 200 e não produz efeito nenhum.
  */
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 
 import { VERSAO_PADRAO_DA_GRAPH } from "@/lib/graph-version";
 import { logger } from "@/lib/logger";
@@ -119,7 +120,7 @@ async function enviar(
   // `business_messaging` sem `ctwa_clid` é recusado, e `website` exige dados do
   // navegador que o CRM não tem — `system_generated` é a origem declarada para
   // venda registrada em sistema, casada pelo telefone em hash.
-  const comClique = conversao.cliqueDeOrigem.trim() !== "";
+  const comClique = (conversao.cliqueDeOrigem ?? "").trim() !== "";
   if (!comClique && !conversao.telefone) {
     return {
       tipo: "permanente",
@@ -129,6 +130,35 @@ async function enviar(
   }
 
   const userData: Record<string, unknown> = comClique ? { ctwa_clid: conversao.cliqueDeOrigem } : {};
+  const identidade = conversao.identidade;
+  if (identidade) {
+    userData.external_id = [hash(identidade.identificadorExterno)];
+    const email = identidade.email?.trim().toLowerCase();
+    if (email && email.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      userData.em = [hash(email)];
+    }
+    const normalizaNome = (valor?: string) =>
+      (valor ?? "")
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .toLowerCase()
+        .replace(/[^\p{L}]/gu, "");
+    const nome = normalizaNome(identidade.nome);
+    const sobrenome = normalizaNome(identidade.sobrenome);
+    if (nome) userData.fn = [hash(nome)];
+    if (sobrenome) userData.ln = [hash(sobrenome)];
+    const fbc = identidade.identificadorDeCliqueWeb;
+    const fbp = identidade.identificadorDoNavegador;
+    if (fbc && fbc.length <= 500 && /^fb\.\d+\.\d{13}\.[^\s]+$/.test(fbc)) userData.fbc = fbc;
+    if (fbp && /^fb\.\d+\.\d{13}\.\d+$/.test(fbp)) userData.fbp = fbp;
+    if (identidade.ipDoContato && isIP(identidade.ipDoContato)) {
+      userData.client_ip_address = identidade.ipDoContato;
+    }
+    const agente = identidade.agenteDoNavegadorDoContato;
+    if (agente && agente.length <= 1024 && !/[\r\n]/.test(agente)) {
+      userData.client_user_agent = agente;
+    }
+  }
   // ─── Página ou WABA, só no clique-para-WhatsApp (#2098) ────────────────────
   //
   // A Meta cobra UM dos dois apenas quando a origem é `business_messaging` +
@@ -160,7 +190,7 @@ async function enviar(
   const customData: Record<string, unknown> = {};
   if (ehCompra && conversao.valorCentavos !== null) {
     customData.value = conversao.valorCentavos / 100;
-    customData.currency = conversao.moeda.toUpperCase();
+    customData.currency = (conversao.moeda ?? "BRL").toUpperCase();
   }
 
   const corpo: Record<string, unknown> = {

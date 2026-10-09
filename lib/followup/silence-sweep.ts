@@ -143,6 +143,24 @@ export interface SilencePointer {
   handoff_policy?: "pause" | "cancel" | "allow";
 }
 
+/** Impede repetir o mesmo fluxo no mesmo episódio de silêncio. */
+export async function episodioDeSilencioJaAtendido(
+  admin: SupabaseClient,
+  input: { organization_id: string; contact_id: string; pointer_id: string },
+  inboundAt: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("followup_enrollments")
+    .select("id")
+    .eq("organization_id", input.organization_id)
+    .eq("contact_id", input.contact_id)
+    .eq("pointer_id", input.pointer_id)
+    .gte("started_at", inboundAt)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return Boolean(data?.length);
+}
+
 /** DB surface o sweep precisa — narrow por consumidor (mesma doutrina de `AdminClient`/`ReactivityAdminClient`/`FollowupGateDb`). */
 export interface SilenceSweepDb {
   /** Pointers ativos com trigger_config.kind='silence', de TODAS as orgs. */

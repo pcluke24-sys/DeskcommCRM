@@ -57,6 +57,11 @@ export function TenantOverviewClient({ id, cobrancaLigada = false }: TenantOverv
           status={organization.status}
           suspendedKind={organization.suspended_kind ?? null}
           displayName={organization.display_name}
+          aiModuleEnabled={organization.settings?.ai_module_enabled !== false}
+          onboardedAt={organization.onboarded_at}
+          slug={organization.slug}
+          canDeleteTenant={data.data.can_delete_tenant}
+          primaryOrganizationId={data.data.primary_organization_id ?? null}
         />
       </div>
     </div>

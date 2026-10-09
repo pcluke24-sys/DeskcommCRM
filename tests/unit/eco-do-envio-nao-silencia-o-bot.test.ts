@@ -383,7 +383,7 @@ describe("eco do envio da automação — reconhecido como nosso (#652)", () => 
 /**
  * O ECO DO ENVIO ASSINADO (#2066, PR #2079).
  *
- * Com a assinatura do emissor ligada, o que vai ao canal é `*Nome*\ntexto`,
+ * Com a assinatura do emissor ligada, o que vai ao canal é `*Nome:*\ntexto`,
  * mas `messages.body` guarda só `texto` (a assinatura é do canal, não do
  * histórico). O eco do WhatsApp devolve o que SAIU — com a linha do nome. Pela
  * igualdade exata, o eco do próprio envio assinado deixava de casar com a linha

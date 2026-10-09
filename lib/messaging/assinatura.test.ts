@@ -48,9 +48,9 @@ describe("capitalizarIniciais", () => {
 });
 
 describe("linhaDeAssinatura", () => {
-  it("humano: `*Nome*\n` com iniciais em maiúsculo, quando a config liga humanos", () => {
+  it("humano: `*Nome:*\n` com iniciais em maiúsculo, quando a config liga humanos", () => {
     expect(linhaDeAssinatura({ humanos: true, ia: false, nomeIa: "x" }, "user", "carlos gaban")).toBe(
-      "*Carlos Gaban*\n",
+      "*Carlos Gaban:*\n",
     );
   });
 

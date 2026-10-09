@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ehOperante } from "@/lib/organizacao/operante";
 import { redirect } from "next/navigation";
 import type { OnboardingState } from "@/lib/schemas/onboarding";
+import { moduloIaEstaLiberado } from "@/lib/ai/modulo";
 
 export class OnboardingError extends Error {
   constructor(
@@ -83,14 +84,19 @@ export async function requireOnboardingCtx(orgIdDaAba?: string): Promise<Onboard
   };
 }
 
-export async function loadOnboardingState(orgId: string): Promise<{
+export async function loadOnboardingState(orgId: string, includeAiModule = false): Promise<{
   state: OnboardingState;
   onboardedAt: string | null;
+  aiModuleEnabled: boolean;
+  setupMode: "agency" | "client";
 }> {
+  // Mantido na assinatura por compatibilidade com as páginas que pediam o
+  // módulo de IA explicitamente; em v1.78 os settings já são lidos sempre.
+  void includeAiModule;
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("organizations")
-    .select("onboarding_state, onboarded_at")
+    .select("onboarding_state, onboarded_at, settings")
     .eq("id", orgId)
     .maybeSingle();
   if (error) throw new OnboardingError("db_error", error.message);
@@ -98,6 +104,11 @@ export async function loadOnboardingState(orgId: string): Promise<{
   return {
     state: (data.onboarding_state as OnboardingState | null) ?? {},
     onboardedAt: (data.onboarded_at as string | null) ?? null,
+    aiModuleEnabled: moduloIaEstaLiberado((data as { settings?: unknown }).settings),
+    setupMode:
+      ((data as { settings?: Record<string, unknown> | null }).settings?.setup_mode === "agency"
+        ? "agency"
+        : "client"),
   };
 }
 

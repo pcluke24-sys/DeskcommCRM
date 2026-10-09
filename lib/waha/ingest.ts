@@ -137,7 +137,7 @@ async function ehEcoDeEnvioNosso(
       if ((l.type ?? "chat") !== "chat") return true;
       continue;
     }
-    // Com a assinatura do emissor ligada (#2066), o eco traz `*Nome*\ntexto` e a
+    // Com a assinatura do emissor ligada (#2066), o eco traz `*Nome:*\ntexto` e a
     // linha guarda `texto`: sem tirar a linha do nome, o eco do próprio envio
     // assinado seria lido como digitação no celular e calaria a IA.
     const gravado = (l.body ?? "").trim();

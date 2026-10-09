@@ -16,6 +16,7 @@ ser fonte sem ninguém decidir isso.
 
 | arquivo | escopo |
 |---|---|
+| `inbox-assinatura-e-nao-lida.architecture.json` | Assinatura opt-in das mensagens humanas com o atendente real e retorno manual da conversa para a fila de não lidas, ambos isolados por organização. |
 | `historico-do-funil.architecture.json` | Coleta prospectiva no CRM, agregados sob RLS por etapa, origem, UTM ou referência de anúncio, filtros de período e CSV pelo hub Análise. |
 | `origem-e-movimento-no-inbox.architecture.json` | Origem do lead no Inbox e movimentação pela mesma rota, histórico e conversões do Kanban. |
 | `conversoes-de-anuncios.architecture.json` | venda, entrega, protocolo assíncrono, pendências e reprocessamento |
