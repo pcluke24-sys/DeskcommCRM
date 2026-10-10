@@ -607,6 +607,13 @@ jobs:
         # aceita `timeout-minutes`. Razão e medições: o cabeçalho da action.
         timeout-minutes: 5
 
+      - name: Preparar referência histórica oficial do kit
+        # O fork não publicou v1.63.0; a comparação histórica continua obrigatória.
+        # Busca somente a referência oficial, sem trocar o checkout ou publicar tag.
+        run: |
+          git fetch --no-tags --depth=1 https://github.com/melgarafael/DeskcommCRM.git refs/tags/v1.63.0:refs/tags/v1.63.0
+          test "$(git rev-parse refs/tags/v1.63.0)" = 093e0656a8c6895659878445018395214ab44561
+
       - name: RLS isolation + governance invariants (pg${{ matrix.pg }})
         # O token é só para `gh release view`: o test:db confere o update.sh da
         # última release publicada (issue #1909), e a API anônima tem teto de 60

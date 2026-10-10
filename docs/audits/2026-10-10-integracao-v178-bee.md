@@ -52,6 +52,17 @@ não equivalem à suíte E2E inteira. Publicar apenas após autorização imedia
 
 ## Checklist do sistema vivo
 
+### Evidência visual da etapa e perda no Inbox
+
+Os screenshots são do ambiente local com dados fictícios e registram a sequência
+do caso E2E, sem provar produção:
+
+- `evidence/triagem-16set-l12/etapa-01-seletor-na-conversa.png`: seletor no cabeçalho.
+- `evidence/triagem-16set-l12/etapa-02-opcoes.png`: opções de etapa disponíveis.
+- `evidence/triagem-16set-l12/etapa-03-movido.png`: etapa alterada na conversa.
+- `evidence/triagem-16set-l12/etapa-04-motivo-da-perda.png`: coleta do motivo.
+- `evidence/triagem-16set-l12/etapa-05-perdido.png`: estado final de perda.
+
 - Caminho: configuração da organização → envio humano → adaptador do canal;
   o texto interno é preservado e a configuração começa desligada.
 - Autor efetivo: teste de troca de atendente confirma o nome e o identificador
