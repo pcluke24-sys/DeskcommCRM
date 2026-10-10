@@ -1,14 +1,17 @@
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { roleAtLeast } from "@/lib/auth/types";
 import { loadOnboardingState } from "@/app/actions/onboarding/_shared";
 import { Stepper } from "./_components/Stepper";
 import { OutrasOrganizacoes } from "./_components/OutrasOrganizacoes";
 import { SkipToEnd } from "./_components/SkipToEnd";
 import { SimboloDoProduto } from "@/components/branding/MarcaDoProduto";
-import { resolveBranding, marcaEhADoProduto } from "@/lib/branding";
+import { marcaEhADoProduto } from "@/lib/branding";
+import { marcaDaInstalacao } from "@/lib/branding/instalacao";
+import { ICONE_DESENHADO, iconeDaAba } from "@/lib/branding/icone";
 import { marcaDaSaida } from "@/lib/branding/saida";
-import { podeConfigurarOrganizacao } from "@/lib/onboarding/acesso";
+import { baseDoStorage } from "@/lib/branding/logo";
 import { passosVisiveis } from "@/lib/onboarding/passos";
 import { env } from "@/lib/env";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
@@ -22,26 +25,36 @@ export default async function OnboardingLayout({ children }: { children: React.R
   // `/login` fechava o círculo: quem entrasse de novo voltaria para cá. A saída
   // é a tela que CRIA a organização que falta.
   if (!activeOrg) redirect("/get-started");
-  if (!podeConfigurarOrganizacao(activeOrg.role)) redirect("/app");
+  if (!roleAtLeast(activeOrg.role, "manager")) redirect("/app/inbox");
 
-  const { state, onboardedAt, aiModuleEnabled, setupMode } = await loadOnboardingState(activeOrg.orgId, true);
+  const { state, onboardedAt } = await loadOnboardingState(activeOrg.orgId);
   if (onboardedAt) redirect("/app/inbox");
-  if (setupMode === "agency" && !user.is_platform_admin) redirect("/app");
 
   // Os passos que ESTA instalação oferece, com o que já foi resolvido. O
   // indicador não decide mais nada sozinho — ele desenha o que recebe.
-  const passos = passosVisiveis({
-    lojaLigada: env.NUVEMSHOP_ENABLED,
-    iaLiberada: aiModuleEnabled,
-  }).map((p) => ({
+  const passos = passosVisiveis({ lojaLigada: env.NUVEMSHOP_ENABLED }).map((p) => ({
     segmento: p.segmento,
     rotulo: p.rotulo,
     cumprido: p.cumprido(state),
   }));
 
   const isDev = process.env.NODE_ENV !== "production";
-  const resolved = await marcaDaSaida(activeOrg.orgId);
-  const marca = resolveBranding(resolved.nome, resolved.logoUrl);
+  // Ícone pequeno de REFORÇO, nunca o logotipo completo: o nome já é escrito
+  // como legenda ao lado (`marca.name`), então usar o logo inteiro aqui duplica
+  // a marca em dois formatos ao mesmo tempo. `iconeDaAba` é a mesma resolução
+  // de `app/icon.tsx` — arquivo subido em Marca › ícone da aba, com fallback
+  // para o ladrilho desenhado quando não há upload.
+  //
+  // Sem ícone subido e sem marca própria, o `/icon` desenharia o símbolo do
+  // produto num PNG sempre claro. Aí vale o SVG inline, que acompanha o tema:
+  // a marca padrão não muda de cara. A condição é a MESMA de `app/icon.tsx`
+  // (`marcaDaSaida(null)`, banco acima do `.env`). Nenhuma das duas lança.
+  const linhaDaMarca = await marcaDaInstalacao();
+  const iconeUrl = iconeDaAba(linhaDaMarca?.favicon_path, baseDoStorage());
+  const marcaDoIcone = await marcaDaSaida(null);
+  const simboloDoProduto =
+    iconeUrl === ICONE_DESENHADO &&
+    marcaEhADoProduto({ name: marcaDoIcone.nome, logoUrl: marcaDoIcone.logoUrl });
 
   return (
     <IdiomaProvider locale={user.idioma}>
@@ -50,13 +63,23 @@ export default async function OnboardingLayout({ children }: { children: React.R
           <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
               {/* O nome está escrito logo abaixo — o símbolo é reforço, não legenda. */}
-              {marcaEhADoProduto(marca) && (
-                <SimboloDoProduto nome={marca.name} decorativo className="h-9 w-9" />
+              {simboloDoProduto ? (
+                <SimboloDoProduto nome={marcaDoIcone.nome} decorativo className="h-9 w-9" />
+              ) : (
+                // <img> em vez de next/image de propósito, mesmo motivo de
+                // `components/shell/Sidebar.tsx`: a URL vem de quem hospeda (banco),
+                // fora da allowlist de domínios fechada no build da imagem pré-buildada.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={iconeUrl}
+                  alt=""
+                  aria-hidden
+                  decoding="async"
+                  className="h-9 w-9 rounded-md object-contain"
+                />
               )}
               <div>
-                <p className="text-xs tracking-wider text-muted-foreground uppercase">
-                  {marca.name}
-                </p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">{marcaDoIcone.nome}</p>
                 <h1 className="text-lg font-semibold tracking-tight">{activeOrg.name}</h1>
               </div>
             </div>

@@ -1,12 +1,11 @@
 import { type NextRequest } from "next/server";
-import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { requirePlatformAdmin, requirePlatformAdminEscrita, falhaDaEscritaDePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { mfaEmDivida } from "@/lib/auth/server";
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/admin/tenants/[id]
@@ -38,6 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       status,
       onboarded_at,
       suspended_at,
+      suspended_kind,
       created_at,
       settings
     `,
@@ -168,16 +168,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const requestId = randomUUID();
   const supportDenied = await requireSupportWrite((await params).id);
   if (supportDenied) return supportDenied;
-  let adminCtx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
+  let adminCtx: Awaited<ReturnType<typeof requirePlatformAdminEscrita>>;
   try {
-    adminCtx = await requirePlatformAdmin();
-  } catch {
-    return fail("forbidden", "Platform admin required", 403, { requestId });
+    adminCtx = await requirePlatformAdminEscrita();
+  } catch (err) {
+    return falhaDaEscritaDePlatformAdmin(err, requestId);
   }
-  if (adminCtx.platformAdmin.scope !== "full")
-    return fail("forbidden", "Acesso somente leitura", 403, { requestId });
-  if (await mfaEmDivida())
-    return fail("mfa_required", "Confirme a verificação em duas etapas", 403, { requestId });
   const body = await req.json().catch(() => null);
   const parsed = z
     .object({

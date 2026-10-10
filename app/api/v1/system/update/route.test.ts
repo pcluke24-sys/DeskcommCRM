@@ -4,12 +4,17 @@ import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   insertError: { code: "", message: "" },
   audit: vi.fn(),
-  principal: true,
+  escrita: vi.fn(async () => ({ user: { id: "owner" }, platformAdmin: { user_id: "owner", scope: "full", mfa_required: false } })),
 }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: async () => null }));
 vi.mock("@/lib/auth/server", () => ({
   loadAuthUser: async () => ({ id: "owner", is_platform_admin: true }),
-  isPlatformOwnerInPrimaryOrg: async () => mocks.principal,
+  mfaEmDivida: async () => false,
+}));
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+vi.mock("@/lib/auth/requirePlatformAdmin", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/requirePlatformAdmin")>()),
+  requirePlatformAdminEscrita: mocks.escrita,
 }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
 vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn() } }));
@@ -38,21 +43,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { POST } from "./route";
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.principal = true;
-  mocks.insertError = { code: "", message: "" };
-});
-
-it("recusa a atualização quando o dono navega numa organização cliente", async () => {
-  mocks.principal = false;
-  const response = await POST(
-    new NextRequest("http://localhost/api/v1/system/update", { method: "POST" }),
-  );
-  expect(response.status).toBe(403);
-  expect((await response.json()).error.code).toBe("forbidden");
-  expect(mocks.audit).not.toHaveBeenCalled();
-});
+beforeEach(() => vi.clearAllMocks());
 
 it("explica a preparação de extensão que bloqueia a atualização sem despachar um run", async () => {
   mocks.insertError = { code: "P0001", message: "extension_preparation_in_progress" };
@@ -86,4 +77,13 @@ it("não disfarça falha de infraestrutura como conflito de extensão", async ()
   );
   expect(response.status).toBe(500);
   expect((await response.json()).error.message).not.toContain("Abra Extensões");
+});
+
+it("support_readonly não dispara atualização: 403 forbidden_scope, nada gravado", async () => {
+  const { EscritaDePlatformAdminNegada } = await import("@/lib/auth/requirePlatformAdmin");
+  mocks.escrita.mockRejectedValueOnce(new EscritaDePlatformAdminNegada("forbidden_scope", "somente leitura"));
+  const response = await POST(new NextRequest("http://localhost/api/v1/system/update", { method: "POST" }));
+  expect(response.status).toBe(403);
+  expect((await response.json()).error.code).toBe("forbidden_scope");
+  expect(mocks.audit).not.toHaveBeenCalled();
 });

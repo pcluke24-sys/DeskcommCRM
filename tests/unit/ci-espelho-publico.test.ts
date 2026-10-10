@@ -11,6 +11,16 @@ const { comEspelho } = require("../../.github/actions/preparar-registro/configur
 };
 
 describe("cache público de imagens na esteira", () => {
+  it("prepara a tag histórica oficial antes do banco sem pular nenhum gate", () => {
+    const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+    const job = ci.slice(ci.indexOf("  invariants-majors:"), ci.indexOf("  invariants:", ci.indexOf("  invariants-majors:")));
+    const fetch = "git fetch --no-tags --depth=1 https://github.com/melgarafael/DeskcommCRM.git refs/tags/v1.63.0:refs/tags/v1.63.0";
+    expect(job).toContain(fetch);
+    expect(job.indexOf(fetch)).toBeLessThan(job.indexOf("run: pnpm test:db"));
+    expect(job).toContain('test "$(git rev-parse refs/tags/v1.63.0)" = 093e0656a8c6895659878445018395214ab44561');
+    expect(job).toContain("run: pnpm test:db:update");
+    expect(job).not.toContain("continue-on-error: true");
+  });
   it("recupera download transitório sem repetir um download já bem sucedido", async () => {
     let chamadas = 0;
     const esperas: number[] = [];

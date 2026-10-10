@@ -1,6 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as PlatformAdminModule from "@/lib/auth/requirePlatformAdmin";
 const { guard, rpc } = vi.hoisted(() => ({ guard: vi.fn(), rpc: vi.fn() }));
-vi.mock("@/lib/auth/requirePlatformAdmin", () => ({ requirePlatformAdmin: guard }));
+vi.mock("@/lib/auth/requirePlatformAdmin", async (importOriginal) => {
+  const actual = await importOriginal<typeof PlatformAdminModule>();
+  return {
+    ...actual,
+    requirePlatformAdmin: guard,
+    requirePlatformAdminEscrita: async () => {
+      const ctx = await guard();
+      if (ctx.platformAdmin.scope !== "full") throw new actual.EscritaDePlatformAdminNegada("forbidden_scope");
+      return ctx;
+    },
+  };
+});
 vi.mock("@/lib/auth/server", () => ({ mfaEmDivida: vi.fn().mockResolvedValue(false) }));
 vi.mock("@/lib/impersonate/support", () => ({
   requireSupportWrite: vi.fn().mockResolvedValue(null),

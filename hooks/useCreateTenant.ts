@@ -11,13 +11,12 @@ import { apiClient } from "@/lib/api/client";
 // ---------------------------------------------------------------------------
 
 export interface CreateTenantPayload {
-  setup_mode?: "client" | "agency";
   display_name: string;
   slug: string;
   legal_name?: string;
   cnpj?: string;
   plan?: "standard" | "pro" | "enterprise";
-  ai_module_enabled?: boolean;
+  plano_id?: string;
   owner_email: string;
   owner_interface_settings?: InterfaceSettings;
 }

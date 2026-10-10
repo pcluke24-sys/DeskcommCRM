@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { agruparRefetch } from "@/hooks/realtime/agrupar-refetch";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { useRefetchDeSeguranca } from "@/hooks/realtime/useRefetchDeSeguranca";
+import { agendarRecargaDasConversas } from "@/hooks/inbox/recargaDasConversas";
 import { apiClient } from "@/lib/api/client";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import type { Message } from "@/lib/types/messaging";
@@ -60,7 +61,7 @@ export function useMessagesRealtime(conversationId: string | null) {
       agruparRefetch(() => {
         if (!conversationId) return;
         void qc.invalidateQueries({ queryKey, exact: true });
-        void qc.invalidateQueries({ queryKey: ["conversations"] });
+        agendarRecargaDasConversas(qc);
       }, 500),
     [qc, conversationId, queryKey],
   );

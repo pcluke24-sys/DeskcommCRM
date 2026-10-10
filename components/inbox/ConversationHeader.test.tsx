@@ -16,6 +16,7 @@ import type { ConversationWithContact } from "@/hooks/inbox/useConversationsReal
 const closeMutate = vi.hoisted(() => vi.fn());
 const arquivarMutate = vi.hoisted(() => vi.fn());
 const startCall = vi.hoisted(() => vi.fn());
+const marcarNaoLidaMutate = vi.hoisted(() => vi.fn());
 
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => ({ user: { id: "u1", support: null } }),
@@ -36,6 +37,16 @@ vi.mock("@/hooks/inbox/useResumeAiAttendance", () => ({
 }));
 vi.mock("@/hooks/inbox/usePauseAiAttendance", () => ({
   usePauseAiAttendance: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("@/hooks/inbox/useMarkAsUnread", () => ({
+  useMarkAsUnread: () => ({ mutate: marcarNaoLidaMutate, isPending: false }),
+}));
+// Spec 21, etapa 15: o cabeçalho chama os hooks de pessoal em toda
+// renderização (antes dos early returns) — sem este mock, o `useMutation` real
+// exigiria QueryClientProvider e o teste inteiro caía.
+vi.mock("@/hooks/contacts/usePersonalContact", () => ({
+  useMarkPersonalContact: () => ({ mutate: vi.fn(), isPending: false }),
+  useUnmarkPersonalContact: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/ai/useAutomaticoAtivo", () => ({
   useAutomaticoAtivo: () => ({ data: false }),
@@ -85,6 +96,7 @@ beforeEach(() => {
   closeMutate.mockReset();
   arquivarMutate.mockReset();
   startCall.mockReset();
+  marcarNaoLidaMutate.mockReset();
 });
 
 describe("ConversationHeader — chamada de voz na Inbox", () => {
@@ -98,6 +110,7 @@ describe("ConversationHeader — chamada de voz na Inbox", () => {
       phone_number: "+5511999999999",
       tags: [],
       is_blocked: false,
+      is_personal: false,
       is_anonymized: false,
     };
     render(<ConversationHeader conversation={atual} />);
@@ -116,6 +129,7 @@ describe("ConversationHeader — chamada de voz na Inbox", () => {
       phone_number: "+5511999999999",
       tags: [],
       is_blocked: false,
+      is_personal: false,
       is_anonymized: false,
     };
     render(<ConversationHeader conversation={atual} />);
@@ -204,5 +218,25 @@ describe("ConversationHeader — busca dentro da conversa (#1793)", () => {
     expect(buscar).toHaveBeenCalledOnce();
     expect(closeMutate).not.toHaveBeenCalled();
     expect(arquivarMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("ConversationHeader — devolver para não lidas", () => {
+  it("marca no servidor e só então fecha o painel aberto", async () => {
+    const user = userEvent.setup();
+    const aoMarcar = vi.fn();
+    marcarNaoLidaMutate.mockImplementation((_id, options) => options?.onSuccess?.());
+
+    render(
+      <ConversationHeader conversation={conversa("open")} onMarkedUnread={aoMarcar} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Marcar como não lida" }));
+
+    expect(marcarNaoLidaMutate).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+    expect(aoMarcar).toHaveBeenCalledOnce();
   });
 });

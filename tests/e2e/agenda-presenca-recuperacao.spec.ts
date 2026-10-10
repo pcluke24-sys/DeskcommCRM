@@ -145,6 +145,17 @@ async function login(page: Page, email: string) {
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.waitForURL(/\/app(?:\/|$)/, { timeout: 60000 });
 }
+// O radar só pinta as listas depois que a tela busca /api/v1/leads/at-risk, e
+// no CI essa resposta levou ~3,9 s nas duas falhas medidas (#1879), disputando o
+// servidor com os prefetches do menu. O `expect` de 5 s começava junto com a
+// busca e perdia a corrida por ~1 s. Espera-se o EVENTO (a resposta), não um prazo.
+async function abrirRadar(page: Page) {
+  const carregou = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === "/api/v1/leads/at-risk" && r.request().method() === "GET",
+  );
+  await page.goto("/app/radar");
+  expect((await carregou).status()).toBe(200);
+}
 async function detail(page: Page, id: string, title: string) {
   await page.goto(`/app/agenda?compromisso=${id}`);
   await expect(
@@ -1069,11 +1080,8 @@ test("Radar recorta demandas pela RLS real, além do pool frio, e preserva gest�
   };
   await policy("own");
   await login(page, members.agent!.email);
-  await page.goto("/app/radar");
-  await expect(page.getByTestId("radar-sem-proximo-passo")).toContainText(
-    "Própria fora do pool",
-    { timeout: 20_000 },
-  );
+  await abrirRadar(page);
+  await expect(page.getByTestId("radar-sem-proximo-passo")).toContainText("Própria fora do pool");
   const own = await read();
   expect(own.sem_proximo_passo.map((d) => d.id).sort()).toEqual(
     [expected["Própria fora do pool"], expected["Conversa própria sem lead"]].sort(),
@@ -1091,10 +1099,8 @@ test("Radar recorta demandas pela RLS real, além do pool frio, e preserva gest�
   );
   expect(unassigned.total_sem_proximo_passo).toBe(3);
   await login(page, members.manager!.email);
-  await page.goto("/app/radar");
-  await expect(page.getByTestId("radar-sem-proximo-passo")).toContainText("Órfã de gestão", {
-    timeout: 20_000,
-  });
+  await abrirRadar(page);
+  await expect(page.getByTestId("radar-sem-proximo-passo")).toContainText("Órfã de gestão");
   expect((await read()).total_sem_proximo_passo).toBe(6);
   await login(page, members.viewer!.email);
   expect((await page.request.get("/api/v1/leads/at-risk")).status()).toBe(403);
@@ -1113,10 +1119,8 @@ test("Radar recorta demandas pela RLS real, além do pool frio, e preserva gest�
   await page.getByRole("button", { name: /Acompanhar/ }).click();
   await page.getByRole("button", { name: "Confirmar e entrar" }).click();
   await page.waitForURL("**/app/inbox");
-  await page.goto("/app/radar");
-  await expect(page.getByTestId("radar-sem-proximo-passo")).toContainText("Órfã de gestão", {
-    timeout: 20_000,
-  });
+  await abrirRadar(page);
+  await expect(page.getByTestId("radar-sem-proximo-passo")).toContainText("Órfã de gestão");
   expect((await read()).total_sem_proximo_passo).toBe(6);
   await page.getByRole("button", { name: "Sair do acompanhamento" }).click();
   await page.waitForURL("**/app/inbox");

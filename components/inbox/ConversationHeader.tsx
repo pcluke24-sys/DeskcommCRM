@@ -21,21 +21,30 @@ import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useReleaseConversation } from "@/hooks/inbox/useReleaseConversation";
 import {
+  useMarkPersonalContact,
+  useUnmarkPersonalContact,
+} from "@/hooks/contacts/usePersonalContact";
+import { ROLE_RANK } from "@/lib/auth/types";
+import {
   useArchiveConversation,
   useCloseConversation,
   useReopenConversation,
 } from "@/hooks/inbox/useCloseConversation";
 import { useResumeAiAttendance } from "@/hooks/inbox/useResumeAiAttendance";
 import { usePauseAiAttendance } from "@/hooks/inbox/usePauseAiAttendance";
+import { useMarkAsUnread } from "@/hooks/inbox/useMarkAsUnread";
 import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
 import { OwnerBadge } from "@/components/kanban/OwnerBadge";
 import { comandoDaConversa, ROTULO_DO_MOTIVO } from "@/lib/inbox/comando-da-conversa";
 import { ReassignDialog } from "@/components/inbox/ReassignDialog";
 import { SnoozeButton } from "@/components/inbox/SnoozeButton";
 import { DialButton } from "@/components/voice/DialButton";
+import { VideoCallButton } from "@/components/inbox/VideoCallButton";
+import { motivoDoContato } from "@/lib/inbox/motivo-do-envio-bloqueado";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
+import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
 
 interface Props {
   conversation: ConversationWithContact;
@@ -49,6 +58,8 @@ interface Props {
   botaoBuscaRef?: RefObject<HTMLButtonElement | null>;
   /** Seleciona outra conversa no Inbox — a aba Número do Transferir abre a do outro número. */
   onAbrirConversa?: (id: string) => void;
+  /** Fecha o painel depois de devolver a conversa para a fila de não lidas. */
+  onMarkedUnread?: () => void;
 }
 
 /**
@@ -83,6 +94,7 @@ export function ConversationHeader({
   onBuscar,
   buscaAberta,
   botaoBuscaRef,
+  onMarkedUnread,
 }: Props) {
   const t = useT();
   const { user, activeOrg } = useAuth();
@@ -93,19 +105,43 @@ export function ConversationHeader({
   const arquivar = useArchiveConversation();
   const retomar = useResumeAiAttendance();
   const pausar = usePauseAiAttendance();
+  const marcarNaoLida = useMarkAsUnread();
   // "Existe automático nesta org?" — sem isto o selo afirmava que o robô estava
   // atendendo em instalação que nunca configurou agente nenhum.
   const automaticoDaOrg = useAutomaticoAtivo();
   const [reassignOpen, setReassignOpen] = useState(false);
   const [confirmFecharOpen, setConfirmFecharOpen] = useState(false);
   const [confirmArquivarOpen, setConfirmArquivarOpen] = useState(false);
+  const [confirmPessoalOpen, setConfirmPessoalOpen] = useState(false);
 
   const c = conversation.contacts ?? null;
   const displayName = rotuloDoContato(c, t);
+  /**
+   * POR ONDE ESTA CONVERSA ENTROU — o mesmo rótulo da lista e da tela de
+   * canais (#2383). `null` quando não há canal, e aí o badge não existe.
+   */
+  const rotuloCanal = rotuloDoCanalDaConversa(conversation.channel_sessions, t);
   const phone = c?.phone_number ? phoneForDisplay(c.phone_number) : null;
   const status = conversation.status;
   const isMineAssigned = conversation.assigned_to_user_id === user.id;
   const isOpen = status === "open" || conversation.assigned_to_user_id == null;
+
+  // Marcar/desmarcar pessoal (spec 21, etapa 15 — botão no cabeçalho).
+  //
+  // GERENTE pode (spec decisão 1, D3): pessoal é decisão operacional — esconder
+  // uma conversa da operação. Desbloquear exige ADMIN porque reabre um canal
+  // que o cliente fechou (direito do titular, LGPD): dois gestos parecidos,
+  // dois gates diferentes, cada um com seu motivo.
+  //
+  // Os hooks ficam AQUI, antes de qualquer early return (a ordem dos hooks não
+  // pode mudar entre renderizações); com contato ausente o id vazio nunca
+  // dispara porque o botão nem é desenhado.
+  const ehPessoal = c?.is_personal === true;
+  const podeMarcarPessoal =
+    (user.is_platform_admin && !user.support) ||
+    (activeOrg != null && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager);
+  const marcarPessoal = useMarkPersonalContact(c?.id ?? "");
+  const desmarcarPessoal = useUnmarkPersonalContact(c?.id ?? "");
 
   /**
    * QUEM MANDA, uma pergunta com uma resposta.
@@ -126,6 +162,7 @@ export function ConversationHeader({
     last_handoff_reason: conversation.last_handoff_reason ?? null,
     force_human: c?.force_human ?? null,
     is_blocked: conversation.contacts?.is_blocked ?? null,
+    is_group: conversation.is_group ?? false,
     automaticoDaOrg: automaticoDaOrg.data,
   });
 
@@ -201,6 +238,31 @@ export function ConversationHeader({
             provider={conversation.channel_sessions?.provider ?? null}
             lastInboundAt={conversation.last_inbound_at}
           />
+          {/* #2383: O CANAL DESTA CONVERSA, NO CABEÇALHO — a acepção que faltava
+              da issue: a lista já dizia por onde a conversa entrou, a conversa
+              ABERTA não dizia. O logo ao lado nomeia o provedor, não o número:
+              com "Peças" e "Vendas" conectados, ele é idêntico nos dois casos.
+
+              O TEXTO é o mesmo da lista e da tela `/app/connections`
+              (`rotuloDoCanalDaConversa` → `nomeDoCanal`): uma segunda cadeia de
+              regras aqui seria como as leituras de "quem manda" divergiram —
+              três telas, um fato, uma fonte.
+
+              `max-w` + `truncate` respondem ao critério de aceite "layout
+              utilizável com nomes de canal maiores": o badge encolhe e o `title`
+              devolve o texto inteiro. Sem canal (grupo, conversa sem sessão,
+              não-WA) não há rótulo nenhum e esta barra fica exatamente como
+              estava — o badge é acréscimo, não substituição. */}
+          {rotuloCanal && (
+            <Badge
+              variant="outline"
+              className="h-4 min-w-0 max-w-[9rem] truncate px-1.5 text-[10px]"
+              title={`${t("Entrou por")} ${rotuloCanal}`}
+              data-testid="canal-da-conversa"
+            >
+              <span className="truncate">{rotuloCanal}</span>
+            </Badge>
+          )}
         </div>
 
         {/* QUEM ESTÁ NO COMANDO, com nome e por GEOMETRIA — disco cheio para
@@ -258,6 +320,25 @@ export function ConversationHeader({
         {!conversation.is_group && c?.id && (
           <DialButton contactId={c.id} hasPhone={!!c.phone_number} />
         )}
+        {/* Videochamada (#2440): sem JITSI_SERVER_URL este botão não renderiza,
+            então ele não ocupa lugar nem na instalação que não oferece a feature.
+            A sala é aleatória por chamada (#2441) — não depende de telefone,
+            só do link ir pelo chat.
+
+            `provider`/`lastInboundAt`, `bloqueio` e `encerrada` vêm para o
+            botão seguir a MESMA régua do composer: janela de 24h (a rota não
+            barra quem envia da tela — vira 131047 silencioso, #1614), a trava
+            de contato e a de conversa encerrada. Os textos saem da mesma função
+            do composer (lib/inbox/motivo-do-envio-bloqueado.ts); encerrada só
+            desabilita, sem texto, como o composer faz. `supportReadonly` fica
+            de fora: ele mora no `user`, que este componente não recebe. */}
+        <VideoCallButton
+          conversationId={conversation.id}
+          provider={conversation.channel_sessions?.provider ?? null}
+          lastInboundAt={conversation.last_inbound_at}
+          bloqueio={motivoDoContato(c, t)}
+          encerrada={status === "closed"}
+        />
         {isOpen && (
           <Button
             size="sm"
@@ -350,6 +431,20 @@ export function ConversationHeader({
             snoozeUntil={conversation.snooze_until ?? null}
           />
         )}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={marcarNaoLida.isPending}
+          data-testid="marcar-como-nao-lida"
+          title={t("Devolve esta conversa para a lista de não lidas sem alterar as mensagens.")}
+          onClick={() =>
+            marcarNaoLida.mutate(conversation.id, {
+              onSuccess: () => onMarkedUnread?.(),
+            })
+          }
+        >
+          {marcarNaoLida.isPending ? t("Marcando...") : t("Marcar como não lida")}
+        </Button>
         {!encerrada && (
           <Button
             size="sm"
@@ -380,6 +475,33 @@ export function ConversationHeader({
             onClick={() => setConfirmArquivarOpen(true)}
           >
             {arquivar.isPending ? t("Arquivando...") : t("Arquivar")}
+          </Button>
+        )}
+        {/* PESSOAL (spec 21, etapa 15): marcar tira a conversa do inbox na
+            hora; desmarcar relista. O `data-testid` é contrato do e2e da
+            spec (`contato-pessoal-sai-da-operacao.spec.ts`). */}
+        {podeMarcarPessoal && c?.id && !ehPessoal && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={marcarPessoal.isPending}
+            data-testid="marcar-pessoal"
+            title={t("Tira este contato da operação: a conversa sai do inbox.")}
+            onClick={() => setConfirmPessoalOpen(true)}
+          >
+            {t("Marcar como pessoal")}
+          </Button>
+        )}
+        {podeMarcarPessoal && c?.id && ehPessoal && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={desmarcarPessoal.isPending}
+            data-testid="desmarcar-pessoal"
+            title={t("Devolve este contato à operação: a conversa volta ao inbox.")}
+            onClick={() => desmarcarPessoal.mutate()}
+          >
+            {desmarcarPessoal.isPending ? t("Desmarcando...") : t("Desmarcar pessoal")}
           </Button>
         )}
         {/* `xl:hidden` porque a partir de 1280px o painel lateral de CRM entra
@@ -484,6 +606,27 @@ export function ConversationHeader({
               }
             >
               {t("Arquivar")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* A confirmação diz o que ACONTECE ao marcar: a conversa fecha e sai do
+          atendente, e o contato fica inutilizado para envio — sem apagar nada.
+          Desmarcar é direto no botão porque só relista o que já está lá. */}
+      <AlertDialog open={confirmPessoalOpen} onOpenChange={setConfirmPessoalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("Marcar este contato como pessoal?")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                "A conversa sai do inbox e o contato fica fora da operação: sem IA, sem follow-up, sem campanha e sem envio. O histórico continua no banco e volta à vista ao desmarcar; follow-ups e campanhas cancelados não voltam.",
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("Cancelar")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => marcarPessoal.mutate()}>
+              {t("Marcar como pessoal")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

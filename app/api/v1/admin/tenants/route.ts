@@ -1,14 +1,15 @@
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createTenantSchema } from "@/lib/schemas/tenant-creation";
 import { issueInvite } from "@/lib/auth/issue-invite";
-import { mfaEmDivida } from "@/lib/auth/server";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
-import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
+import { falhaDaEscritaDePlatformAdmin, requirePlatformAdmin, requirePlatformAdminEscrita, type PlatformAdminContext } from "@/lib/auth/requirePlatformAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { createHash, randomUUID } from "node:crypto";
+import { lerPlano } from "@/lib/cobranca/dono";
+import { moduloLigado } from "@/lib/instalacao/modulos";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -156,20 +157,12 @@ export async function POST(req: NextRequest) {
 
   const requestId = randomUUID();
 
-  let adminCtx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
+  let adminCtx: PlatformAdminContext;
   try {
-    adminCtx = await requirePlatformAdmin();
-  } catch {
-    return fail("forbidden", "Platform admin required", 403, { requestId });
+    adminCtx = await requirePlatformAdminEscrita();
+  } catch (err) {
+    return falhaDaEscritaDePlatformAdmin(err, requestId);
   }
-
-  if (adminCtx.platformAdmin.scope !== "full") {
-    return fail("forbidden", "Seu acesso de suporte não permite criar organizações", 403, {
-      requestId,
-    });
-  }
-  if (await mfaEmDivida())
-    return fail("mfa_required", "Confirme a verificação em duas etapas", 403, { requestId });
   const key = req.headers.get("Idempotency-Key") ?? randomUUID();
   if (!z.string().uuid().safeParse(key).success) {
     return fail("validation_error", "Idempotency-Key deve ser UUID", 400, { requestId });
@@ -191,7 +184,25 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const request = { ...parsed.data, owner_email: parsed.data.owner_email.trim().toLowerCase() };
+  // Spec da cobrança §2.1/§9 (D-2): com a cobrança ligada, o dono escolhe um
+  // plano de cobrança (ou nenhum: isenta) e o rótulo antigo `settings.plan`
+  // deixa de ser gravado. Desligada, tudo segue como antes, e `plano_id` é
+  // recusado aqui, com nome (a função SQL também o recusa).
+  const cobrancaLigada = await moduloLigado(admin, "cobranca");
+  if (parsed.data.plano_id !== undefined) {
+    const plano = cobrancaLigada ? await lerPlano(admin, parsed.data.plano_id) : null;
+    if (plano === "erro") return fail("internal_error", "Não foi possível ler o plano", 500, { requestId });
+    if (!plano || plano.arquivado_em !== null) {
+      return fail(
+        "plano_invalido",
+        cobrancaLigada ? "Plano não encontrado ou arquivado." : "A cobrança está desligada nesta instalação.",
+        422,
+        { requestId },
+      );
+    }
+  }
+  const normalizado = { ...parsed.data, owner_email: parsed.data.owner_email.trim().toLowerCase() };
+  const request = cobrancaLigada ? { ...normalizado, plan: undefined } : normalizado;
   const { data: org, error } = await admin.rpc("fn_create_tenant_with_owner", {
     p_actor: adminCtx.user.id,
     p_key: key,
@@ -199,6 +210,18 @@ export async function POST(req: NextRequest) {
     p_hash: createHash("sha256").update(JSON.stringify(request)).digest("hex"),
   });
   if (error) {
+    // Corrida: a chave desligou ou o plano foi arquivado entre a leitura acima e
+    // a função (Task 5 levanta 22023 com a mensagem). Sem isto, o 22023 caía no
+    // "slug já existe" abaixo.
+    if (error.code === "22023" && /cobranca_desligada|plano_invalido/.test(error.message ?? "")) {
+      const desligou = (error.message ?? "").includes("cobranca_desligada");
+      return fail(
+        "plano_invalido",
+        desligou ? "A cobrança está desligada nesta instalação." : "Plano não encontrado ou arquivado.",
+        422,
+        { requestId },
+      );
+    }
     if (error.code === "23505" || error.code === "22023") {
       return fail("conflict", "Slug já existe ou a chave foi usada com outros dados", 409, {
         requestId,
@@ -207,30 +230,6 @@ export async function POST(req: NextRequest) {
     return fail("internal_error", "Não foi possível criar a organização", 500, { requestId });
   }
   if (org.created) {
-    // A função atômica de criação preserva seu contrato enxuto; a flag comercial
-    // é gravada logo após, ainda no mesmo request administrativo.
-    const { data: createdSettings } = await admin
-      .from("organizations")
-      .select("settings")
-      .eq("id", org.id)
-      .maybeSingle();
-    const { error: moduleUpdateError } = await admin
-      .from("organizations")
-      .update({
-        settings: {
-          ...((createdSettings?.settings as Record<string, unknown> | null) ?? {}),
-          ai_module_enabled: request.ai_module_enabled,
-          setup_mode: request.setup_mode,
-        },
-      })
-      .eq("id", org.id);
-    if (moduleUpdateError)
-      return fail(
-        "internal_error",
-        "A organização foi criada, mas não foi possível salvar a contratação de IA. Confira a organização antes de enviar o convite.",
-        500,
-        { requestId },
-      );
     await audit({
       action: "tenant.created_by_platform_admin",
       actorUserId: adminCtx.user.id,
@@ -243,22 +242,11 @@ export async function POST(req: NextRequest) {
       metadata: {
         slug: org.slug,
         display_name: org.display_name,
-        plan: request.plan,
-        ai_module_enabled: request.ai_module_enabled,
+        plan: request.plan ?? null,
+        plano_id: request.plano_id ?? null,
         creator_role: "admin",
       },
     });
-  }
-  if (org.created && request.owner_email !== adminCtx.user.email?.trim().toLowerCase()) {
-    const { error: invitationError } = await admin.from("team_invites").insert({
-      id: org.invite_id, organization_id: org.id, email: request.owner_email, role: "admin",
-      interface_settings: request.owner_interface_settings ?? { preset: "completa" },
-      invited_by: adminCtx.user.id,
-      inviter_name: adminCtx.user.user_metadata?.full_name ?? "Administrador",
-      last_sent_at: new Date(org.issued_at * 1000).toISOString(),
-      expires_at: new Date((org.issued_at + 86400) * 1000).toISOString(),
-    });
-    if (invitationError) return fail("internal_error", "Organização criada, mas não foi possível registrar o convite do responsável. Reenvie pela equipe.", 500, { requestId });
   }
   const ownerInvitation =
     request.owner_email === adminCtx.user.email?.trim().toLowerCase()
@@ -277,8 +265,6 @@ export async function POST(req: NextRequest) {
           issuedAt: org.issued_at,
           dispatch: org.created,
         });
-  if (ownerInvitation) await admin.from("team_invites").update({ email_dispatched: ownerInvitation.email_dispatched })
-    .eq("organization_id", org.id).eq("id", org.invite_id).is("accepted_at", null).is("revoked_at", null);
   return ok(
     {
       id: org.id,

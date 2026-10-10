@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { AuthIndisponivelError } from "@/lib/auth/indisponibilidade";
 
-const { loadAuthUser, resolveActiveOrg, getUser, listar } = vi.hoisted(() => ({
+const { loadAuthUser, orgAtivaDaApi, getUser, listar } = vi.hoisted(() => ({
   loadAuthUser: vi.fn(),
-  resolveActiveOrg: vi.fn(),
+  orgAtivaDaApi: vi.fn(),
   getUser: vi.fn(),
   listar: vi.fn(),
 }));
-vi.mock("@/lib/auth/server", () => ({ loadAuthUser, resolveActiveOrg }));
+vi.mock("@/lib/auth/server", () => ({ loadAuthUser }));
+vi.mock("@/lib/auth/require-role", () => ({ orgAtivaDaApi }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser } }) }));
 vi.mock("@/app/api/v1/conversations/_handler", () => ({ listConversationsHandler: listar }));
 vi.mock("@/lib/users/com-nome-do-atendente", () => ({
@@ -19,7 +20,7 @@ const { GET } = await import("@/app/api/v1/conversations/route");
 beforeEach(() => {
   vi.clearAllMocks();
   loadAuthUser.mockResolvedValue({ id: "actor-1", idioma: "pt-BR" });
-  resolveActiveOrg.mockResolvedValue({ orgId: "org-1" });
+  orgAtivaDaApi.mockResolvedValue({ ok: true, org: { orgId: "org-1" } });
   listar.mockResolvedValue({ conversations: [], cursor: null, has_more: false });
 });
 describe("listagem Inbox usa uma validação de identidade no handler", () => {

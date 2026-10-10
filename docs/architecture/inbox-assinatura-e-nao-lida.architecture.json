@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Assinatura humana e conversa não lida",
+    "subtitle": "configuração isolada por organização e pendência visual sem mudar mensagens",
+    "output": "inbox-assinatura-e-nao-lida.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "ui", "label": "Tela" },
+    { "id": "api", "label": "API" },
+    { "id": "dados", "label": "Dados" },
+    { "id": "canal", "label": "Canal" }
+  ],
+  "mainPath": ["config", "settings", "envio", "whatsapp"],
+  "nodes": [
+    { "id": "config", "lane": "ui", "col": 1, "type": "frontend", "label": "Configurações › Atendimento", "sublabel": "assinatura humana opt-in por organização" },
+    { "id": "settings", "lane": "dados", "col": 2, "type": "database", "label": "organizations.settings", "sublabel": "assinatura_mensagens.humanos; padrão desligado" },
+    { "id": "envio", "lane": "api", "col": 3, "type": "backend", "label": "POST /api/v1/messages", "sublabel": "resolve o usuário real e prefixa só o corpo enviado" },
+    { "id": "historico", "lane": "dados", "col": 4, "type": "database", "label": "messages.body", "sublabel": "guarda o texto original, sem prefixo" },
+    { "id": "whatsapp", "lane": "canal", "col": 4, "type": "external", "label": "WhatsApp", "sublabel": "*Nome do atendente* + mensagem" },
+    { "id": "cabecalho", "lane": "ui", "col": 1, "type": "frontend", "label": "Marcar como não lida", "sublabel": "fecha a conversa aberta e devolve à lista" },
+    { "id": "rotaNaoLida", "lane": "api", "col": 2, "type": "backend", "label": "POST mark-unread", "sublabel": "agent+, sessão gravável e filtro de tenant" },
+    { "id": "contador", "lane": "dados", "col": 3, "type": "database", "label": "unread_count_for_assignee", "sublabel": "1 = pendência manual; conteúdo permanece intacto" }
+  ],
+  "edges": [
+    { "from": "config", "to": "settings", "label": "salva sem apagar outras chaves" },
+    { "from": "settings", "to": "envio", "label": "só true habilita" },
+    { "from": "envio", "to": "whatsapp", "label": "prefixa atendente humano" },
+    { "from": "envio", "to": "historico", "label": "persiste texto cru" },
+    { "from": "cabecalho", "to": "rotaNaoLida", "label": "ação explícita" },
+    { "from": "rotaNaoLida", "to": "contador", "label": "org + conversa" },
+    { "from": "contador", "to": "cabecalho", "label": "invalida lista e contadores" }
+  ],
+  "cards": [
+    {
+      "title": "Não-ligações deliberadas",
+      "body": "A assinatura humana não alcança IA, automação, integração por token nem mensagem do cliente. Marcar como não lida não cria, edita ou apaga mensagem e não troca o responsável da conversa."
+    }
+  ]
+}

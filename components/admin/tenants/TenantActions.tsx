@@ -9,6 +9,7 @@ import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import { DeleteTenantDialog } from "./DeleteTenantDialog";
 import { useQueryClient } from "@tanstack/react-query";
+import type { TipoDeSuspensao } from "@/lib/organizacao/operante";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -27,8 +28,9 @@ import {
 interface TenantActionsProps {
   organizationId: string;
   status: "active" | "suspended" | "redacted";
+  suspendedKind?: TipoDeSuspensao | null;
   displayName: string;
-  aiModuleEnabled: boolean;
+  aiModuleEnabled?: boolean;
   onboardedAt?: string | null;
   slug?: string;
   canDeleteTenant?: boolean;
@@ -42,8 +44,9 @@ interface TenantActionsProps {
 export function TenantActions({
   organizationId,
   status,
+  suspendedKind,
   displayName,
-  aiModuleEnabled,
+  aiModuleEnabled = true,
   onboardedAt,
   slug,
   canDeleteTenant = false,
@@ -107,6 +110,7 @@ export function TenantActions({
   const canSuspend = status === "active";
   const isSuspended = status === "suspended";
   const isRedacted = status === "redacted";
+  const suspensaPorCobranca = isSuspended && suspendedKind === "cobranca";
 
   return (
     <>
@@ -176,8 +180,18 @@ export function TenantActions({
           </Button>
         )}
 
-        {/* Reactivate */}
+        {/* Cobrança tem sua própria porta de reativação. */}
         {isSuspended && (
+          <p data-testid="tipo-da-suspensao" className="text-sm font-medium">
+            {suspensaPorCobranca ? t("Suspensa por falta de pagamento") : t("Suspensão administrativa")}
+          </p>
+        )}
+        {suspensaPorCobranca && (
+          <p className="text-xs text-muted-foreground">
+            {t("Para reativar, use o card Cobrança: Dar prazo ou Tornar isenta.")}
+          </p>
+        )}
+        {isSuspended && !suspensaPorCobranca && (
           <Button
             className="w-full"
             variant="outline"

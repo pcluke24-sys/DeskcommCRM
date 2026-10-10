@@ -190,3 +190,6 @@ L12.G2.1 · GET /api/v1/contact-tags = 200 · corpo = {"data":["obra","vip"]}
 #946 · chips oferecidos = ["+ obra"]
 #946 · PATCH = 200 · antes={"tags":["VIP"]} depois={"tags":["VIP","obra"]}
 L12.G2.2 · 400px tema escuro · documento: scrollWidth=400 clientWidth=400 transborda=false
+etapa · opções = ["Datos incompletos","Pedido confirmado","Cancelado"]
+etapa · POST /api/v1/leads/bulk = 200
+etapa · atividades stage_changed = [{"type":"stage_changed","payload":{"bulk":true,"pipeline_id":"145c499f-a249-4ec9-a1fe-bd06a332ce8e","to_stage_id":"65ba4a66-6de7-4555-858f-ceab48efc95f","from_stage_id":"767fa245-4908-4ef1-b6ff-636f3e4d1dc1"}}]

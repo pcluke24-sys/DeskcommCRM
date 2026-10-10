@@ -240,6 +240,30 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    href: "/app/companies",
+    label: "Empresas",
+    description: "Cadastro B2B — razão social, CNPJ e decisores.",
+    icon: "Buildings",
+    group: "crm",
+    section: "O dia a dia da venda",
+    // SEM sidebar: o CRM já tem Funis/Contatos/Tarefas no menu diário; este trio
+    // mora no hub "Ver tudo em CRM" para não reabrir a corrida por pixel.
+    minRole: "viewer",
+    // Módulo opcional da instalação, desligado por padrão (doc 68, #1621).
+    modulo: "crm_b2b",
+  },
+  {
+    href: "/app/people",
+    label: "Pessoas",
+    description: "Decisores e contatos ligados a empresas, com vários telefones.",
+    icon: "UserCircle",
+    group: "crm",
+    section: "O dia a dia da venda",
+    minRole: "viewer",
+    // Módulo opcional da instalação, desligado por padrão (doc 68, #1621).
+    modulo: "crm_b2b",
+  },
+  {
     // Extraída do PR #418 (@clinicacentrodosorrisosc-code). Fica no CRM e no
     // sidebar porque é tela de USO DIÁRIO — quem atende abre para ver o que
     // vence hoje, do mesmo jeito que abre o Inbox. Sem `minRole`: `viewer` VÊ
@@ -252,6 +276,20 @@ export const NAV_CATALOG = [
     group: "crm",
     section: "O dia a dia da venda",
     sidebar: true,
+  },
+  {
+    // A porta dos planos de tarefa (#1752): montar a sequência UMA vez e o
+    // `apply_task_plan` aplicá-la a cada negócio. Fica no MESMO hub de Tarefas,
+    // mas SEM `sidebar` pelo critério já usado em Empresas/Pessoas: é
+    // CADASTRO, não uso diário — quem monta um plano abre esta tela poucas
+    // vezes, e o menu de 900px (`tests/e2e/navegacao.spec.ts`) não ganha mais
+    // um pixel por isso.
+    href: "/app/tasks/planos",
+    label: "Planos de tarefa",
+    description: "Sequências reutilizáveis de tarefas — montar uma vez e aplicar a cada negócio.",
+    icon: "FlowArrow",
+    group: "crm",
+    section: "O dia a dia da venda",
   },
   {
     // Módulo VoIP (migration 0347). No grupo do CRM pelo mesmo critério de
@@ -313,6 +351,17 @@ export const NAV_CATALOG = [
     // onde o catálogo se CADASTRA — trabalho de quando entra produto novo ou
     // muda preço, não de toda manhã. Quem atende não a abre para vender; abre o
     // Inbox e o funil, que continuam no menu.
+  },
+  {
+    href: "/app/imports",
+    label: "Importações",
+    description: "Lotes CSV/XLSX de empresas, pessoas e telefones.",
+    icon: "FileText",
+    group: "crm",
+    section: "Preparar a venda",
+    minRole: "manager",
+    // Módulo opcional da instalação, desligado por padrão (doc 68, #1621).
+    modulo: "crm_b2b",
   },
   {
     href: "/app/proposals",
@@ -718,6 +767,21 @@ export const NAV_CATALOG = [
     minRole: "viewer",
   },
   {
+    // Módulo opcional (ADR-0002), fonte `modulos_instalados` — a porta só existe
+    // depois que o administrador da instalação instala `honorarios` em
+    // `/admin/modulos`. Mesmo mecanismo genérico de `banco_externo` acima, só
+    // que a fonte é a TABELA, não a flag de `platform_config`; `deModuloDesligado`
+    // e este filtro não sabem a diferença, e não precisam saber.
+    href: "/app/honorarios",
+    label: "Honorários",
+    description: "O modelo de cobrança de cada caso e o calendário de parcelas.",
+    icon: "ChartBar",
+    group: "analise",
+    section: "Dinheiro",
+    minRole: "viewer",
+    modulo: "honorarios",
+  },
+  {
     href: "/app/metrics",
     label: "Desempenho",
     description: "Funil e performance por atendente nos últimos 30 dias.",
@@ -832,6 +896,20 @@ export const NAV_CATALOG = [
     minRole: "manager",
   },
   {
+    // A porta do freio POR EMPRESA do passo `ai_decide` (issue #2367). O #2228
+    // criou o passo e o deixou opcional POR REGRA; sem esta tela, desligar de
+    // uma vez todos os `ai_decide` de uma organização só existiria como
+    // `UPDATE` à mão no `organizations.settings` — o anti-exemplo de "toda
+    // configuração tem superfície" (docs/doctrine/restricao-de-canal.md).
+    href: "/app/settings/automacoes",
+    label: "Automações",
+    description: "O freio único do passo em que a IA escolhe entre as opções de uma regra, para a empresa inteira.",
+    icon: "FlowArrow",
+    group: "organizacao",
+    section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
     // A porta que faltava para o vocabulário de etiquetas (issue #852). Até
     // aqui a etiqueta só ENTRAva no vocabulário — cada agente escrevia a que
     // quisesse em `add_tag` — e não havia por onde corrigir, juntar as duas
@@ -850,6 +928,20 @@ export const NAV_CATALOG = [
     icon: "Tag",
     group: "organizacao",
     section: "Sua empresa",
+    minRole: "manager",
+  },
+  {
+    // A área única dos recursos opcionais (pedido do mantenedor, doc 73/80):
+    // tudo o que a empresa pode ligar, com o estado e o caminho até a tela onde
+    // se liga. Só leitura — quem liga continua sendo a tela do assunto.
+    href: "/app/settings/recursos",
+    label: "Recursos opcionais",
+    description: "Tudo o que se liga e desliga, se está ligado e onde se ajusta.",
+    icon: "ListChecks",
+    group: "organizacao",
+    section: "Sua empresa",
+    // `manager`: o gerente decide metade das chaves da lista. Atendente e
+    // leitor não ajustam nenhuma, e a tela redireciona os dois para /403.
     minRole: "manager",
   },
   {
@@ -915,8 +1007,10 @@ export const NAV_CATALOG = [
   },
   {
     href: "/app/settings/billing",
-    label: "Billing",
-    description: "Plano e cobrança.",
+    // Spec da cobrança §9: as mensagens de limite e a Central mandam para
+    // "Configurações › Plano e cobrança" — o item precisa ter esse nome.
+    label: "Plano e cobrança",
+    description: "Pagamento, troca de plano e faturas da sua empresa.",
     icon: "Receipt",
     group: "organizacao",
     section: "Sua empresa",

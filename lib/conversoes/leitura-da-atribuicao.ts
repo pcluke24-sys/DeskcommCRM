@@ -25,8 +25,8 @@ import type {
 
 export interface AtribuicaoParaEnvio {
   plataforma: PlataformaDeAnuncio;
-  /** `ad_source_id` — o `ctwa_clid`, quando o clique que abriu a conversa existe. */
-  cliqueDeOrigem: string | null;
+  /** `ad_source_id` — o `ctwa_clid`, o clique que abriu a conversa. */
+  cliqueDeOrigem: string;
   telefone: string | null;
   identidade: IdentidadeParaCorrespondencia;
   identificadoresGoogle?: IdentificadoresGoogle;
@@ -34,10 +34,7 @@ export interface AtribuicaoParaEnvio {
 
 export type LeituraDeAtribuicao =
   | { temAtribuicao: true; atribuicao: AtribuicaoParaEnvio }
-  | {
-      temAtribuicao: false;
-      motivo: "sem_contato" | "sem_telefone" | "sem_atribuicao" | "plataforma_desconhecida";
-    };
+  | { temAtribuicao: false; motivo: "sem_contato" | "sem_atribuicao" | "plataforma_desconhecida" };
 
 /**
  * ⚠️ FILTRA `organization_id` MESMO TENDO O ID DO CONTATO. O chamador é um
@@ -71,14 +68,13 @@ export async function lerAtribuicao(
     source_metadata: unknown;
   };
   if (linha.is_anonymized) return { temAtribuicao: false, motivo: "sem_contato" };
-  const telefone = linha.phone_number ? linha.phone_number.replace(/\D/g, "") || null : null;
-
   const meta =
     linha.source_metadata && typeof linha.source_metadata === "object"
       ? (linha.source_metadata as Record<string, unknown>)
       : {};
 
   const clique = typeof meta.ad_source_id === "string" ? meta.ad_source_id.trim() : "";
+  const telefone = linha.phone_number ? linha.phone_number.replace(/\D/g, "") || null : null;
   const web =
     meta.web_tracking && typeof meta.web_tracking === "object"
       ? (meta.web_tracking as Record<string, unknown>)
@@ -93,13 +89,12 @@ export async function lerAtribuicao(
     sobrenome: partes.length > 1 ? partes.slice(1).join(" ") : undefined,
     identificadorDeCliqueWeb: texto(web.fbc ?? meta.fbc),
     identificadorDoNavegador: texto(web.fbp ?? meta.fbp),
-    // IP e navegador so entram quando a origem web os registrou no contato.
     ipDoContato: texto(web.client_ip_address),
     agenteDoNavegadorDoContato: texto(web.client_user_agent),
   };
-  // Se há clique, preservamos a plataforma que o originou. Sem clique, trata-se
-  // de conversão offline/CRM: o telefone identifica a pessoa e a conexão Meta
-  // da própria organização define o destino, sem inventar atribuição ao anúncio.
+
+  // Com clique, a plataforma precisa ser conhecida. Sem clique, é conversão
+  // offline/CRM e a conexão Meta da própria organização define o destino.
   if (clique && !ehPlataformaConhecida(meta.ad_platform)) {
     return { temAtribuicao: false, motivo: "plataforma_desconhecida" };
   }
@@ -116,11 +111,9 @@ export async function lerAtribuicao(
   return {
     temAtribuicao: true,
     atribuicao: {
-      plataforma: ehPlataformaConhecida(meta.ad_platform)
-        ? meta.ad_platform
-        : "meta_ads",
-      cliqueDeOrigem: clique || null,
+      plataforma: ehPlataformaConhecida(meta.ad_platform) ? meta.ad_platform : "meta_ads",
       ...(ids ? { identificadoresGoogle: ids } : {}),
+      cliqueDeOrigem: clique,
       // Só dígitos: a plataforma exige E.164 sem `+` nem separadores ANTES do
       // hash. Normalizar depois do hash seria tarde — o hash já estaria errado.
       telefone,
@@ -128,3 +121,16 @@ export async function lerAtribuicao(
     },
   };
 }
+
+/**
+ * Os `utm_source` que significam "anúncio da Meta". Lista fechada e explícita:
+ * quem monta o link escolhe o texto, e casar por "contém face" pegaria
+ * `facebook_organico` e mandaria venda orgânica para a conta de anúncios.
+ */
+export const UTM_SOURCES_DA_META: ReadonlySet<string> = new Set([
+  "meta",
+  "facebook",
+  "fb",
+  "instagram",
+  "ig",
+]);

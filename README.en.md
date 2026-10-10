@@ -204,10 +204,10 @@ filters that noise and prints `✓ banco atualizado`. If the database is busy wi
 customers, it applies again on its own (up to 3 passes) and says so — this holds from the update
 after the one that installs this fix. If you see `⚠ Apareceram avisos no banco que NÃO são os esperados`, that one
 is worth keeping: the **end** of the output tells you what to do in each case (repeat with `--force`
-when the database was busy, declare `SUPABASE_DB_ADMIN_URL` when it was permissions). Restoring the
-backup is the last resort.
+when the database was busy, declare `SUPABASE_DB_ADMIN_URL` when it was permissions).
 
-**Something went wrong?** `bash hostgator-setup-kit/restore.sh` returns to the backup.
+**Something went wrong?** Keep the message and ask for help. `restore.sh` does **not** put the
+backup back over the database in use: it only restores into an empty database (see [`hostgator-setup-kit/README.md`](hostgator-setup-kit/README.md)).
 **Just want a diagnosis?** `bash hostgator-setup-kit/healthcheck.sh`.
 
 > ⚠️ **On an older install that doesn't have the screen agent yet**, run `update.sh` **twice**:
@@ -287,7 +287,7 @@ Every screen has a door in the navigation — CI fails a screen that exists but 
 | **WhatsApp** | WAHA Plus (NOWEB engine) + Meta Cloud API | QR to start fast; official channel to scale |
 | **Queues** | `event_log` table + workers (cron) | A database trigger never makes HTTP calls |
 | **Rate limit** | Upstash Redis (sliding window) | Serverless, free tier is enough |
-| **AI** | Vercel AI SDK v7 — OpenRouter, Anthropic, OpenAI and Google | The installer asks which; switch later from the screen |
+| **AI** | Vercel AI SDK v7 — OpenRouter, Requesty, Anthropic, OpenAI and Google | The installer asks which; switch later from the screen |
 | **Validation** | Zod | External input, env, payloads |
 | **Observability** | Sentry (scrubbed in errors, transactions, spans and breadcrumbs) | Opt-in telemetry at install time |
 | **Hosting** | Any VPS with Docker (HostGator/SP in the partnership) | App + WhatsApp + workers on your own box |

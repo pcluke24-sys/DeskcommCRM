@@ -16,6 +16,7 @@ import {
 } from "@/lib/waha/resolve-contact-whatsapp-id";
 import {
   bareWaMessageId,
+  canonicalWahaExternalId,
   chatIdFromWaMessageId,
   parseWahaMessageId,
   wahaEchoExternalIds,
@@ -82,6 +83,20 @@ export const wahaAdapter: ChannelAdapter = {
    */
   echoExternalIds(input: { externalId: string; recipient: string }): string[] {
     return wahaEchoExternalIds(input.externalId, input.recipient);
+  },
+
+  /**
+   * A forma canônica de `messages.external_id`: a CAUDA do id (`3EB0…`) em
+   * conversa individual, o id INTACTO em grupo — a que o eco grava em cada um
+   * (regra e porquê em `canonicalWahaExternalId`). O envio devolve a cauda no
+   * NOWEB e o `_serialized` completo no WEBJS — gravar o que veio faria os DOIS
+   * lados escreverem strings diferentes do mesmo id, o `unique (organization_id,
+   * external_id)` nunca disparasse e o eco que chegasse perto do carimbo virasse
+   * a segunda linha (#196). Reduzir aqui (não no handler) mantém a regra do id
+   * dentro da fronteira de canal.
+   */
+  canonicalExternalId(externalId: string): string {
+    return canonicalWahaExternalId(externalId);
   },
 
   // Mesmo pre-check que o handler já fazia com `getWahaClient() !== null`,
@@ -214,6 +229,18 @@ export const wahaAdapter: ChannelAdapter = {
 
       return { reachable: false, status: null, detail: msg.slice(0, 200) };
     }
+  },
+
+  async listGroups(input: { sessionRef: string }) {
+    const client = getWahaClient();
+    if (!client) throw new Error("waha_not_configured");
+    return client.listarGrupos(input.sessionRef);
+  },
+
+  async setGroupIntake(input: { sessionRef: string; receive: boolean }) {
+    const client = getWahaClient();
+    if (!client) return false;
+    return client.definirRecebimentoDeGrupos(input.sessionRef, input.receive);
   },
 
   /**
