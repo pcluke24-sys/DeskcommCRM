@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
+import { roleAtLeast } from "@/lib/auth/types";
 import { loadOnboardingState } from "@/app/actions/onboarding/_shared";
 import { Stepper } from "./_components/Stepper";
 import { OutrasOrganizacoes } from "./_components/OutrasOrganizacoes";
@@ -24,6 +25,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
   // `/login` fechava o círculo: quem entrasse de novo voltaria para cá. A saída
   // é a tela que CRIA a organização que falta.
   if (!activeOrg) redirect("/get-started");
+  if (!roleAtLeast(activeOrg.role, "manager")) redirect("/app/inbox");
 
   const { state, onboardedAt } = await loadOnboardingState(activeOrg.orgId);
   if (onboardedAt) redirect("/app/inbox");

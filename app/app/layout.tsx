@@ -52,6 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!activeOrg && !user.support && (await acessoFoiRevogado(user.id))) {
     redirect("/acesso-revogado");
   }
+  if (!activeOrg && !user.support) redirect("/get-started");
 
   /**
    * A cor desta organização, serializada, ou `null` quando ela não tem uma.
@@ -131,7 +132,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // Suspensão ANTES de onboarding: a org suspensa que nunca terminou o
     // onboarding ia para `/onboarding` e escapava da tela da suspensão.
     if (!ehOperante(orgRow?.status)) redirect("/account-suspended");
-    if (orgRow && !orgRow.onboarded_at && !user.support) redirect("/onboarding");
+    if (orgRow && !orgRow.onboarded_at && !user.support && roleAtLeast(activeOrg.role, "manager")) {
+      redirect("/onboarding");
+    }
     // G4-02: expõe visibility_mode ao client (inbox decide visões visíveis).
     // Fonte confiável (admin client, org do cookie validado) — nunca do body.
     const mode = (orgRow?.settings as { visibility_mode?: VisibilityMode } | null)

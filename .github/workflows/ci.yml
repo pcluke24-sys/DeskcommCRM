@@ -600,6 +600,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: ./.github/actions/preparar-registro
+
       - uses: ./.github/actions/preparar-node
         # O teto do preâmbulo mora aqui porque passo de composite action não
         # aceita `timeout-minutes`. Razão e medições: o cabeçalho da action.

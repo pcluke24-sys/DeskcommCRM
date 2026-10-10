@@ -4,7 +4,7 @@
  * Os modos de falha que este arquivo vigia:
  *  - lead da página com UTM da Meta ganho e NADA no Histórico (o silêncio que
  *    originou a mudança);
- *  - venda orgânica (ou de outra plataforma) indo para a conta de anúncios;
+ *  - identidade anonimizada indo para a conta de anúncios;
  *  - evento sem clique saindo como `business_messaging`, que a Meta recusa;
  *  - valor inventado pelo modelo chegando à Meta;
  *  - o produto lido da conversa (texto livre, em clínica dado de saúde) indo
@@ -119,22 +119,30 @@ describe("quem veio da página com UTM da Meta conta como anúncio", () => {
         ORG,
         CONTATO,
       );
-      expect(r).toEqual({
+      expect(r).toMatchObject({
         temAtribuicao: true,
-        atribuicao: { plataforma: "meta_ads", cliqueDeOrigem: "", telefone: "5511988887777" },
+        atribuicao: {
+          plataforma: "meta_ads", cliqueDeOrigem: "", telefone: "5511988887777",
+          identidade: { identificadorExterno: `${ORG}:${CONTATO}` },
+        },
       });
     },
   );
 
   it.each(["google", "facebook_organico", "newsletter", ""])(
-    "utm_source=%s NÃO vai para a Meta — venda orgânica fica fora",
+    "utm_source=%s sem clique mantém identidade CRM para a conexão autorizada",
     async (utm) => {
       const r = await lerAtribuicao(
         fakeAdmin({ contacts: contatoDaPagina(utm) }) as never,
         ORG,
         CONTATO,
       );
-      expect(r).toEqual({ temAtribuicao: false, motivo: "sem_atribuicao" });
+      // v1.78 aceita conversão offline sem clique; a conexão da própria
+      // organização decide o destino no handler, não a UTM do contato.
+      expect(r).toMatchObject({
+        temAtribuicao: true,
+        atribuicao: { cliqueDeOrigem: "", telefone: "5511988887777", identidade: { identificadorExterno: `${ORG}:${CONTATO}` } },
+      });
     },
   );
 });
@@ -266,11 +274,11 @@ describe("a venda ganha sem valor, de ponta a ponta no handler", () => {
     expect(corpoEnviado(spy).custom_data.value).toBe(250);
   });
 
-  it("venda orgânica continua fora: sem leitura de conversa, sem envio, sem linha", async () => {
+  it("contato anonimizado fica fora: sem leitura de conversa, sem envio, sem linha", async () => {
     vi.mocked(createAdminClient).mockReturnValue(
       fakeAdmin({
         crm_leads: leadGanhoSemValor,
-        contacts: contatoDaPagina("google"),
+        contacts: { ...contatoDaPagina("google"), is_anonymized: true },
         ad_platform_connections: conexaoAtiva,
       }) as never,
     );
@@ -278,7 +286,7 @@ describe("a venda ganha sem valor, de ponta a ponta no handler", () => {
 
     const r = await conversaoDeVendaHandler.handle(evento("lead.won"));
 
-    expect(r.detail).toBe("sem_atribuicao");
+    expect(r.detail).toBe("sem_contato");
     expect(lerValorDaConversa).not.toHaveBeenCalled();
     expect(spy).not.toHaveBeenCalled();
     expect(upserts).toHaveLength(0);

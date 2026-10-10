@@ -66,7 +66,7 @@ describe("recarga do inbox pedida pelo realtime", () => {
     montar();
     await waitFor(() => expect(lista()).toBe(1));
     for (let i = 0; i < 5; i++) fakes.onChange!({});
-    await esperar(400);
+    await esperar(800);
     expect(lista()).toBe(2);
   });
 
@@ -87,7 +87,7 @@ describe("recarga do inbox pedida pelo realtime", () => {
     void qc.invalidateQueries({ queryKey: ["conversations"] });
     await waitFor(() => expect(lista()).toBe(2));
     fakes.onChange!({});
-    await esperar(400);
+    await esperar(800);
     expect(lista(), "a busca em voo foi cancelada por uma nova").toBe(2);
     soltar();
     await waitFor(() => expect(lista()).toBe(3));

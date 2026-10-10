@@ -16,6 +16,7 @@
  * provider/teto é UPDATE na config, sem restart nem deploy.
  */
 import type pg from 'pg';
+import { moduloIaEstaLiberado, ModuloIaBloqueadoError } from '@/lib/ai/modulo';
 
 import { lerLoginCodexRenovandoSeProxima } from '@/lib/ai/credenciais/login-codex';
 import { PROVEDOR_POR_ASSINATURA } from '@/lib/ai/pontos/provedores';
@@ -236,6 +237,7 @@ const llmSettingsSchema = z
  */
 const SQL_CONFIG_COM_ORCAMENTO = `
   select o.settings->'llm'            as llm,
+         o.settings                  as module_settings,
          b.monthly_limit_cents        as teto,
          b.enforcement_mode           as modo,
          b.enforcement_effective_at   as efetivo_em,
@@ -245,9 +247,10 @@ const SQL_CONFIG_COM_ORCAMENTO = `
    where o.id = $1`;
 
 /** A query de antes da 0159 — a rede quando o schema do clone está atrasado. */
-const SQL_CONFIG_LEGADO = `select settings->'llm' as llm from organizations where id = $1`;
+const SQL_CONFIG_LEGADO = `select settings->'llm' as llm, settings as module_settings from organizations where id = $1`;
 
 interface LinhaDeConfig {
+  module_settings?: unknown;
   llm: unknown;
   teto?: number | string | null;
   modo?: string | null;
@@ -322,6 +325,7 @@ export async function resolveOrgLlmConfig(
     throw new Error('organização inexistente ao resolver config LLM');
   }
   const linha = rows[0];
+  if (!moduloIaEstaLiberado(linha?.module_settings)) throw new ModuloIaBloqueadoError();
   const settings = llmSettingsSchema.parse(linha?.llm ?? {});
   const provider = override?.provider ?? settings.provider;
 

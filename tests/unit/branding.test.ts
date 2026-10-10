@@ -208,6 +208,11 @@ type EntradaDeMarca = {
 };
 
 const MARCA_CONGELADA: Record<string, EntradaDeMarca> = {
+  "lib/system/official-release.ts": {
+    categoria: "INFRA",
+    motivo: "Identificador do repositório upstream consultado para informar a release oficial; não é marca exibida ao cliente nem alvo de deploy do fork.",
+    marcas: ["deskcommcrm"],
+  },
   // ─── PROTOCOLO — contrato de fio. Renomear quebra integração alheia. ───
   "lib/ai/pontos/pkce-da-assinatura.ts": {
     categoria: "PROTOCOLO",
@@ -827,6 +832,10 @@ type CategoriaDeHost =
 type EntradaDeHost = { categoria: CategoriaDeHost; motivo: string };
 
 const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
+  "api.github.com": {
+    categoria: "FORNECEDOR",
+    motivo: "API oficial do GitHub consultada por lib/system/official-release.ts para informar a última release upstream, sem alterar o alvo de instalação do fork.",
+  },
   "chatgpt.com": {
     categoria: "CONSOLE",
     motivo:

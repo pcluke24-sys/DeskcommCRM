@@ -125,6 +125,30 @@ afterEach(() => {
 });
 
 describe("a assinatura sai pela cadeia de envio, sem poluir messages.body", () => {
+  it("troca de atendente: usa o usuário que envia agora, sem reutilizar o nome anterior", async () => {
+    const proximo = "55555555-5555-4555-8555-555555555555";
+    mockedNomes.mockResolvedValue(new Map([[proximo, "Pedro Lucas"]]));
+    vi.stubEnv("ZERNIO_ACCOUNT_ID", CONTA);
+    vi.stubEnv("ZERNIO_API_KEY", "sk_env");
+    const fetchMock = respostaOk();
+    vi.stubGlobal("fetch", fetchMock);
+    const { supabase, capturas } = dubleDe(
+      conversaCompleta({ providerConversationId: THREAD }),
+      { assinatura_mensagens: { humanos: true, ia: false } },
+    );
+    await sendMessageHandler(
+      supabase,
+      { ...ctx, actor: { type: "user", id: proximo } },
+      texto(),
+    );
+    expect(mockedNomes).toHaveBeenCalledWith([proximo]);
+    expect(mensagemEnviadoNaRede(fetchMock)).toEqual(
+      expect.objectContaining({ message: "*Pedro Lucas:*\noi" }),
+    );
+    expect(capturas.inserts.messages!.at(-1)?.["body"]).toBe("oi");
+    expect(capturas.inserts.messages!.at(-1)?.["sent_by_user_id"]).toBe(proximo);
+  });
+
   it("humano com config ligada: o canal recebe `*Nome:*\\noi`, o banco guarda `oi`", async () => {
     mockedNomes.mockResolvedValue(new Map([[USER, "carlos gaban"]]));
     vi.stubEnv("ZERNIO_ACCOUNT_ID", CONTA);

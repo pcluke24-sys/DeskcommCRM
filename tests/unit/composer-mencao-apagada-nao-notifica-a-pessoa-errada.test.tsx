@@ -52,6 +52,12 @@ vi.mock("@/hooks/inbox/useAssignableMembers", () => ({
 
 import { Composer } from "@/components/inbox/Composer";
 
+// O shell autenticado fornece a organização usada pelo gate de IA do Composer.
+vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
+  useAuth: () => ({ activeOrg: { orgId: "org-1", ai_module_enabled: true } }),
+}));
+
 function abrirModoNota() {
   const qc = new QueryClient();
   render(

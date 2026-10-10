@@ -139,7 +139,7 @@ describe("as duas portas do fechamento", () => {
     const r = await conversaoDeVendaHandler.handle(evento("lead.stage_changed"));
 
     expect(r.status).toBe("skipped");
-    expect(r.detail).toBe("etapa_sem_evento");
+    expect(r.detail).toBe("nao_e_ganho");
     // A maioria esmagadora das mudanças de etapa cai aqui: não pode nem falar
     // com a rede nem sujar o livro-razão.
     expect(fetchSpy).not.toHaveBeenCalled();

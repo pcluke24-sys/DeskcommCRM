@@ -37,6 +37,11 @@ import type { Idioma } from "./idiomas";
 type Traducoes = Record<string, Partial<Record<Exclude<Idioma, "pt-BR">, string>>>;
 
 export const DICIONARIO: Traducoes = {
+  "Entradas": { es: "Entradas" },
+  "Devolve esta conversa para a lista de não lidas sem alterar as mensagens.": { es: "Devuelve esta conversación a la lista de no leídas sin modificar los mensajes." },
+  "Marcando...": { es: "Marcando..." },
+  "Marcar como não lida": { es: "Marcar como no leída" },
+  "Conversa marcada como não lida.": { es: "Conversación marcada como no leída." },
   "Conectar a assinatura do ChatGPT": { es: "Conectar la suscripción de ChatGPT" },
   "Cada empresa conecta a própria conta do ChatGPT. Abra o link e entre com a conta que tem a assinatura. No fim, o navegador vai para http://127.0.0.1:1455/auth/callback, que pode não abrir — é esperado. Copie esse endereço inteiro, da barra do navegador, e cole aqui.": {
     es: "Cada empresa conecta su propia cuenta de ChatGPT. Abre el enlace e inicia sesión con la cuenta que tiene la suscripción. Al final, el navegador irá a http://127.0.0.1:1455/auth/callback, que quizá no se abra — es normal. Copia la dirección completa de la barra del navegador y pégala aquí.",

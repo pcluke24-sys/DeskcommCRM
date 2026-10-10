@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
-import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
-import { mfaEmDivida } from "@/lib/auth/server";
+import { requirePlatformAdminEscrita, falhaDaEscritaDePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
@@ -21,18 +20,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     .safeParse((await params).id);
   if (!path.success)
     return fail("validation_failed", "Identificador inválido.", 400, { requestId });
-  let ctx: Awaited<ReturnType<typeof requirePlatformAdmin>>;
+  let ctx: Awaited<ReturnType<typeof requirePlatformAdminEscrita>>;
   try {
-    ctx = await requirePlatformAdmin();
-  } catch {
-    return fail("forbidden", "Administrador da plataforma obrigatório.", 403, { requestId });
+    ctx = await requirePlatformAdminEscrita();
+  } catch (err) {
+    return falhaDaEscritaDePlatformAdmin(err, requestId);
   }
-  if (await mfaEmDivida())
-    return fail("mfa_required", "Confirme a verificação em duas etapas.", 403, { requestId });
   const denied = await requireSupportWrite(path.data);
   if (denied) return denied;
-  if (ctx.platformAdmin.scope !== "full")
-    return fail("forbidden", "Acesso de suporte não permite excluir tenants.", 403, { requestId });
   const body = input.safeParse(await req.json().catch(() => null));
   if (!body.success)
     return fail("validation_failed", "Confirme o identificador e informe o motivo.", 400, {

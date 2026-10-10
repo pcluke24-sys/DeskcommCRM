@@ -181,7 +181,7 @@ test("regras de etapa da Meta: sem conexão direta, aparecem quando a venda sai 
     if (e2) throw e2;
     await page.reload();
     await expect(titulo).toBeVisible();
-    await expect(page.getByText(etapa, { exact: true })).toBeVisible();
+    await expect(page.getByTestId(`regra-meta-${stage}`).getByText(etapa, { exact: true })).toBeVisible();
     await titulo.scrollIntoViewIfNeeded();
     await page.screenshot({
       path: "evidence/regras-meta-pelo-canal/01-regras-visiveis-sem-conexao-direta.png",

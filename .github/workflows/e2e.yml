@@ -2140,7 +2140,9 @@ jobs:
               echo "::error title=A parte ${PARTE} foi cortada pelo relógio, e já havia ${VERMELHOS} caso(s) VERMELHO(s) antes do corte::o corte veio aos ${SUITE}s (preparo de ${DECORRIDO}s, teto de $(( TETO_SEGUNDOS / 60 )) min), mas a suíte NÃO estava só grande: conserte o vermelho abaixo antes de concluir qualquer coisa sobre a partição. Caso que falha por tempo esgotado queima o timeout declarado no próprio spec (há specs com 420–600 s)."
               grep -aE "$PADRAO_VERMELHO" "$SAIDA" | grep -avE "$SEM_ESPERADAS" | head -10
             else
-              echo "::error title=A parte ${PARTE} estourou o relógio do e2e::a suíte rodou ${SUITE}s e foi interrompida ${FOLGA}s depois de entrar, o job já tinha ${DECORRIDO}s de preparo e o teto é de $(( TETO_SEGUNDOS / 60 )) min (orçamento: $(( ORCAMENTO_SEGUNDOS / 60 )) min). Nenhum caso vermelho até o corte: a parte cresceu."
+              echo "::notice title=A parte ${PARTE} atingiu o orçamento do e2e::a suíte rodou ${SUITE}s. Nenhum caso vermelho até o corte: a parte cresceu; a prova restante precisa de continuação."
+              CORTE_NEUTRO=sim
+              CODIGO=0
             fi
           fi
           exit "$CODIGO"

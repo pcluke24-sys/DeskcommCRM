@@ -28,7 +28,7 @@
  * `Promise.all`, a reordenação e a qualquer reescrita que preserve o efeito.
  */
 import type { ReactElement, ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const adminClient = { marcador: "admin-client-do-teste" };
 const conexoesDoSeam = [
@@ -36,6 +36,11 @@ const conexoesDoSeam = [
   { id: "sess-2", apelido: "Suporte", status: "SCAN_QR_CODE" },
 ];
 const listarConexoesCaidas = vi.fn(async () => conexoesDoSeam);
+const acesso = vi.hoisted(() => ({
+  org: { orgId: "org-1", role: "admin", interface_settings: null } as { orgId: string; role: string; interface_settings: null } | null,
+  onboardedAt: "2026-01-01" as string | null,
+  revogado: false,
+}));
 
 vi.mock("@/lib/channels/health", () => ({
   listarConexoesCaidas: (...args: unknown[]) => listarConexoesCaidas(...(args as [])),
@@ -49,11 +54,11 @@ vi.mock("@/lib/auth/server", () => ({
     support: null,
     organizations: [],
   }),
-  resolveActiveOrg: async () => ({ orgId: "org-1", role: "admin", interface_settings: null }),
+  resolveActiveOrg: async () => acesso.org,
   isMfaEnrolled: async () => true,
   requiresMfa: async () => false,
 }));
-vi.mock("@/lib/auth/vinculo-revogado", () => ({ acessoFoiRevogado: async () => false }));
+vi.mock("@/lib/auth/vinculo-revogado", () => ({ acessoFoiRevogado: async () => acesso.revogado }));
 vi.mock("next/navigation", () => ({
   redirect: (destino: string) => {
     throw new Error(`redirect inesperado para ${destino}`);
@@ -80,7 +85,7 @@ vi.mock("@/lib/branding/organizacao", () => ({
 Object.assign(adminClient, {
   from: () => ({
     select: () => ({
-      eq: () => ({ maybeSingle: async () => ({ data: { onboarded_at: "2026-01-01", status: "active", settings: null } }) }),
+      eq: () => ({ maybeSingle: async () => ({ data: { onboarded_at: acesso.onboardedAt, status: "active", settings: null } }) }),
     }),
   }),
 });
@@ -99,11 +104,42 @@ function achar(no: ReactNode, alvo: unknown): ReactElement | null {
   return achar(elemento.props?.children, alvo);
 }
 
+// Carregar a árvore uma vez, fora da medição dos casos de redirecionamento.
+beforeAll(async () => {
+  await import("@/app/app/layout");
+}, 120_000);
+
 beforeEach(() => {
   listarConexoesCaidas.mockClear();
+  acesso.org = { orgId: "org-1", role: "admin", interface_settings: null };
+  acesso.onboardedAt = "2026-01-01";
+  acesso.revogado = false;
 });
 
 describe("a faixa de conexão caída", () => {
+  it.each(["agent", "viewer"])("não exige onboarding de %s", async (role) => {
+    acesso.org!.role = role;
+    acesso.onboardedAt = null;
+    const { default: AppLayout } = await import("@/app/app/layout");
+    await expect(AppLayout({ children: null })).resolves.toBeTruthy();
+  });
+  it.each(["admin", "manager"])("exige onboarding de %s", async (role) => {
+    acesso.org!.role = role;
+    acesso.onboardedAt = null;
+    const { default: AppLayout } = await import("@/app/app/layout");
+    await expect(AppLayout({ children: null })).rejects.toThrow("/onboarding");
+  });
+  it("encaminha quem nunca teve organização para criação", async () => {
+    acesso.org = null;
+    const { default: AppLayout } = await import("@/app/app/layout");
+    await expect(AppLayout({ children: null })).rejects.toThrow("/get-started");
+  });
+  it("não oferece criar organização a quem perdeu acesso", async () => {
+    acesso.org = null;
+    acesso.revogado = true;
+    const { default: AppLayout } = await import("@/app/app/layout");
+    await expect(AppLayout({ children: null })).rejects.toThrow("/acesso-revogado");
+  });
   it("recebe EXATAMENTE o que o seam devolveu — não uma lista montada na tela", async () => {
     const { ConexaoCaidaBanner } = await import("@/components/app/ConexaoCaidaBanner");
     const { default: AppLayout } = await import("@/app/app/layout");

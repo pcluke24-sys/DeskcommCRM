@@ -256,14 +256,14 @@ export function HistoricoClient() {
               <thead className="bg-muted">
                 <tr>
                   {[
-                    "Etapa",
+                    t("Etapa"),
                     t("Leads únicos"),
-                    "Entradas",
+                    t("Entradas"),
                     t("Próxima etapa"),
                     t("Avançaram"),
                     t("Taxa de avanço"),
                   ].map((h) => (
-                    <th key={t(h)} className="p-3 whitespace-nowrap">
+                    <th key={h} className="p-3 whitespace-nowrap">
                       {h}
                     </th>
                   ))}

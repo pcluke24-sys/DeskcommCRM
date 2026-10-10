@@ -67,6 +67,17 @@ const ANON_PERMITIDO: readonly Excecao[] = [];
  */
 const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
   {
+    fn: "fn_delete_contact_atomic(uuid,uuid)",
+    razao:
+      "Compatibilidade do fork: app/api/v1/contacts/_handler.ts na release " +
+      "v1.60.4 chama esta RPC com createClient da sessão. Preservada para rollback " +
+      "da atualização; o handler novo usa fn_apagar_contato_com_historico. " +
+      "Exige auth.uid() e fn_role_at_least(p_organization_id, 'agent') antes " +
+      "de qualquer DELETE, todos filtrados pela organização. O gate " +
+      "contato-delete-followup.test.ts prova recusa de viewer, organização " +
+      "alheia, contato de outro tenant e rollback por RESTRICT.",
+  },
+  {
     fn: "encrypt_cpf(text)",
     razao:
       "POST/PATCH app/api/v1/contacts/route.ts e app/api/v1/contacts/[id]/route.ts, " +

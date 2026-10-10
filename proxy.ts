@@ -7,6 +7,7 @@ import { fetchDoServidor } from "@/lib/supabase/fetch-do-servidor";
 import { urlDoSupabaseNoServidor } from "@/lib/supabase/url-do-servidor";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import { CABECALHO_SEM_CSS, PARAMETRO_SEM_CSS } from "@/lib/branding/sem-css-personalizado";
+import { authTemFalhaTransitoria } from "@/lib/auth/indisponibilidade";
 import {
   verifyImpersonateCookieEdge,
   IMPERSONATE_COOKIE_NAME_EDGE,
@@ -96,7 +97,29 @@ export async function proxy(request: NextRequest) {
   // Validate JWT server-side (NEVER use getSession on backend per CLAUDE.md).
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+
+  // Falha fechado, mas não transforma um 504 do Auth em logout/401.
+  if (authTemFalhaTransitoria(authError)) {
+    const message = "Não foi possível verificar sua sessão. Tente novamente em instantes.";
+    return new NextResponse(
+      pathname.startsWith("/api/")
+        ? JSON.stringify({ error: { code: "auth_unavailable", message } })
+        : message,
+      {
+        status: 503,
+        headers: {
+          "content-type": pathname.startsWith("/api/")
+            ? "application/json"
+            : "text/plain; charset=utf-8",
+          "cache-control": "no-store",
+          "retry-after": "5",
+          "x-request-id": requestId,
+        },
+      },
+    );
+  }
 
   if (!user) {
     // API routes must respond with JSON envelope (contract: {error:{code,message}})

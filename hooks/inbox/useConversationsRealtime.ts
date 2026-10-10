@@ -1,6 +1,7 @@
 "use client";
 import { hashKey, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { agruparRefetch } from "@/hooks/realtime/agrupar-refetch";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
 import { useRefetchDeSeguranca } from "@/hooks/realtime/useRefetchDeSeguranca";
 import { agendarRecargaDasConversas } from "@/hooks/inbox/recargaDasConversas";
@@ -73,13 +74,7 @@ export type ConversationWithContact = Conversation & {
 
 /** O vocabulário de LEITURA (7), que inclui os dois estados que só o motor escreve. */
 export type StatusDeConversa =
-  | "open"
-  | "pending"
-  | "resolved"
-  | "claimed"
-  | "ai_handling"
-  | "closed"
-  | "archived";
+  "open" | "pending" | "resolved" | "claimed" | "ai_handling" | "closed" | "archived";
 
 export interface ConversationsFilters {
   /** Um status ou vários — a aba Fila precisa de dois (open + pending). */
@@ -141,10 +136,11 @@ export function useConversationsRealtime(
   orgId: string | null,
 ) {
   const qc = useQueryClient();
-  const queryKey = useMemo(() => ["conversations", filters] as const, [filters]);
+  const queryKey = useMemo(() => ["conversations", filters, orgId] as const, [filters, orgId]);
 
   const query = useInfiniteQuery({
     queryKey,
+    enabled: !!orgId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       const qs = new URLSearchParams();
@@ -205,12 +201,20 @@ export function useConversationsRealtime(
     // anterior, sem aviso, enquanto a nova carregava. Nas outras trocas o
     // `isLoading` volta e o skeleton aparece — ali ele tem o que dizer.
     placeholderData: (anterior, queryAnterior) =>
-      queryAnterior && soMudouOAutomaticoDaFila(queryAnterior.queryKey[1], filters)
+      queryAnterior && queryAnterior.queryKey[2] === orgId && soMudouOAutomaticoDaFila(queryAnterior.queryKey[1], filters)
         ? anterior
         : undefined,
   });
 
-  const onChange = useCallback(() => agendarRecargaDasConversas(qc), [qc]);
+  const refetchAgrupado = useMemo(
+    () =>
+      agruparRefetch(() => {
+        agendarRecargaDasConversas(qc);
+      }, 500),
+    [qc, queryKey],
+  );
+  useEffect(() => () => refetchAgrupado.cancelar(), [refetchAgrupado]);
+  const onChange = useCallback(() => refetchAgrupado.solicitar(), [refetchAgrupado]);
 
   // G4-01 (visibility_mode): a subscription postgres_changes HERDA a RLS de
   // SELECT de `conversations` — o Supabase Realtime avalia as policies do usuário

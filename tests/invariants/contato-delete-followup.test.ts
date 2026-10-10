@@ -39,6 +39,26 @@ const comoAgente = (sql: string, params: unknown[] = []) =>
   comoUsuario(GOV_AGENT_A, sql, params);
 
 describe("exclusão atômica de contato com follow-up", () => {
+  it("recusa organização sem vínculo antes de apagar", async () => {
+    await expect(comoAgente("select fn_delete_contact_atomic($1,$2)", [
+      randomUUID(), randomUUID(),
+    ])).rejects.toThrow(/forbidden/);
+  });
+  it("não apaga contato fora da organização autorizada", async () => {
+    const contato = randomUUID();
+    const outraOrg = randomUUID();
+    await pool.query("insert into organizations(id,slug,legal_name,display_name) values($1,$2,'Isolada','Isolada')", [outraOrg, `isolada-${outraOrg}`]);
+    await pool.query("insert into contacts(id,organization_id,display_name) values($1,$2,'Isolado')", [contato, outraOrg]);
+    try {
+      const resultado = await comoAgente("select fn_delete_contact_atomic($1,$2) id", [GOV_ORG, contato]);
+      expect(resultado.rows[0]?.id).toBeNull();
+      const { rows } = await pool.query("select count(*)::int total from contacts where id=$1", [contato]);
+      expect(rows[0]?.total).toBe(1);
+    } finally {
+      await pool.query("delete from contacts where id=$1", [contato]);
+      await pool.query("delete from organizations where id=$1", [outraOrg]);
+    }
+  });
   it("remove contato e job em cascata, mas continua proibindo apagar o job diretamente", async () => {
     const contato = randomUUID();
     const job = randomUUID();

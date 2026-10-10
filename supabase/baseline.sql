@@ -48495,81 +48495,88 @@ create trigger trg_cobranca_trava_exclusao_com_assinatura_viva
   before delete on public.organizations
   for each row execute function public.fn_cobranca_trava_exclusao_com_assinatura_viva();
 
--- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
+-- ---- apêndice do fork: 20260929214500_0492_garante_despacho_do_agente.sql ----
+-- 0492 — uma mensagem de entrada não pode existir sem a chance de resposta.
 --
--- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
--- função entra ANTES dele — quem o empurrar para o meio desarma a cura para tudo
--- que vier depois. (O último bloco do arquivo é a chamada das travas do suporte,
--- migration 0274, que não cria função.)
--- Vigiado por `tests/unit/varredura-anon-e-o-ultimo-bloco.test.ts`.
+-- O INSERT da mensagem e o evento do agente são duas escritas. Antes, se a
+-- segunda falhasse, a primeira ficava gravada; a reentrega encontrava 23505 e
+-- deliberadamente não despachava de novo. Resultado: Inbox atualizada, agente
+-- mudo, e o follow-up (pipeline separado) aparecendo minutos depois.
 --
--- A 0108 revogou anon numa LISTA de 8 funções, medida num banco instalado do
--- ZERO. Quem ATUALIZA tem outro estado: o `ALTER DEFAULT PRIVILEGES ... GRANT
--- ALL ON FUNCTIONS TO anon` do corpo deste arquivo grava uma entrada em
--- `pg_default_acl` que fica no catálogo PARA SEMPRE, e a partir daí toda função
--- criada em `public` nasce com EXECUTE para anon — inclusive as deste apêndice.
---
--- Medido numa VPS real (2026-08-07), comparando com o que um install fresco
--- produz: 6 definer expostas a anon e 5 a authenticated, entre elas
--- `fn_decrypt_oauth` — alcançável pela anon key, que vai para o browser.
---
--- Lista conserta o estoque e reabre no próximo `create function`. Esta varredura
--- é auto-curativa e roda DEPOIS de tudo que cria função, então cura no mesmo run
--- em que o defeito nasceria. Desfazer o ALTER DEFAULT PRIVILEGES não serve: ele
--- vem do `pg_dump` do Supabase e é reescrito a cada re-aplicação.
---
--- As duas origens de EXECUTE (a mesma lição da 0108): grant DIRETO a anon, que
--- `revoke from public` não remove; e grant a PUBLIC, do qual anon HERDA, que
--- `revoke from anon` não remove. O privilégio EFETIVO de authenticated e
--- service_role é medido ANTES e devolvido depois — tira anon sem tirar leitura.
-do $$
+-- Esta função transforma o despacho em ENSURE idempotente. A trava transacional
+-- fecha a corrida entre duas reentregas, e a própria mensagem fornece todos os
+-- ids do payload — o chamador não pode misturar contato/conversa/sessão.
+
+create or replace function public.fn_garantir_despacho_agente(
+  p_organization_id uuid,
+  p_message_id uuid,
+  p_source text,
+  p_request_id text default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $function$
 declare
-  f record;
-  tinha_auth boolean;
-  tinha_service boolean;
+  v_message public.messages%rowtype;
+  v_event_id uuid;
 begin
-  if to_regrole('anon') is null then
-    return;
+  if p_organization_id is null or p_message_id is null then
+    raise exception 'dispatch_requires_org_and_message' using errcode = '22023';
   end if;
 
-  for f in
-    select p.oid, p.oid::regprocedure as assinatura
-      from pg_proc p
-      join pg_namespace n on n.oid = p.pronamespace
-     where n.nspname = 'public'
-       and p.prosecdef
-  loop
-    tinha_auth := to_regrole('authenticated') is not null
-                  and has_function_privilege('authenticated', f.oid, 'EXECUTE');
-    tinha_service := to_regrole('service_role') is not null
-                     and has_function_privilege('service_role', f.oid, 'EXECUTE');
+  perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text || ':' || p_message_id::text, 0));
 
-    execute format('revoke execute on function %s from public, anon', f.assinatura);
+  select * into v_message
+    from public.messages
+   where organization_id = p_organization_id
+     and id = p_message_id
+     and direction = 'inbound';
+  if not found then
+    raise exception 'inbound_message_not_found_for_org' using errcode = 'P0001';
+  end if;
 
-    if tinha_auth then
-      execute format('grant execute on function %s to authenticated', f.assinatura);
-    end if;
-    if tinha_service then
-      execute format('grant execute on function %s to service_role', f.assinatura);
-    end if;
-  end loop;
-end $$;
+  select id into v_event_id
+    from public.event_log
+   where organization_id = p_organization_id
+     and event_type = 'ai_agent.dispatch_requested'
+     and entity_kind = 'message'
+     and entity_id = p_message_id
+   order by created_at asc, id asc
+   limit 1;
 
--- regra 2 (authenticated): as 5 que o update abriu e o install não abre. Aqui não
--- cabe varredura — `authenticated` PRECISA de EXECUTE nos helpers de RLS e em
--- `retrieve_top_k_chunks` (num install fresco ele tem). É julgamento por função,
--- e o alvo de cada linha é o valor que um install fresco produz, medido.
-revoke execute on function public.fn_audit_log_row() from authenticated;
-revoke execute on function public.fn_decrypt_oauth(bytea) from authenticated;
-revoke execute on function public.fn_encrypt_oauth(text) from authenticated;
-revoke execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid) from authenticated;
-revoke execute on function public.fn_update_budget_consumption() from authenticated;
+  if v_event_id is null then
+    insert into public.event_log
+      (organization_id, event_type, entity_kind, entity_id, payload, metadata)
+    values (
+      p_organization_id,
+      'ai_agent.dispatch_requested',
+      'message',
+      p_message_id,
+      jsonb_build_object(
+        'organization_id', p_organization_id,
+        'conversation_id', v_message.conversation_id,
+        'contact_id', v_message.contact_id,
+        'channel_session_id', v_message.channel_session_id,
+        'inbound_message_id', p_message_id
+      ),
+      jsonb_strip_nulls(jsonb_build_object(
+        'source', coalesce(nullif(p_source, ''), 'inbound_webhook'),
+        'request_id', p_request_id,
+        'emitted_at', extract(epoch from now())
+      ))
+    ) returning id into v_event_id;
+  end if;
 
-grant execute on function public.fn_audit_log_row() to service_role;
-grant execute on function public.fn_decrypt_oauth(bytea) to service_role;
-grant execute on function public.fn_encrypt_oauth(text) to service_role;
-grant execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid) to service_role;
-grant execute on function public.fn_update_budget_consumption() to service_role;
+  return v_event_id;
+end
+$function$;
+
+revoke all on function public.fn_garantir_despacho_agente(uuid, uuid, text, text) from public, anon, authenticated;
+grant execute on function public.fn_garantir_despacho_agente(uuid, uuid, text, text) to service_role;
+
+notify pgrst, 'reload schema';
+
 
 
 -- ---- Criador provisório sai na entrega (migration 0237) ----
@@ -51185,85 +51192,78 @@ grant execute on function public.fn_delete_contact_atomic(uuid,uuid) to authenti
 -- endurecida pelas migrations 0488 e 0501. O baseline mantém a ÚLTIMA
 -- definição da cadeia; não pode reaplicar aqui o corpo antigo da guarda.
 
-
--- ---- apêndice do fork: 20260929214500_0492_garante_despacho_do_agente.sql ----
--- 0492 — uma mensagem de entrada não pode existir sem a chance de resposta.
+-- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
--- O INSERT da mensagem e o evento do agente são duas escritas. Antes, se a
--- segunda falhasse, a primeira ficava gravada; a reentrega encontrava 23505 e
--- deliberadamente não despachava de novo. Resultado: Inbox atualizada, agente
--- mudo, e o follow-up (pipeline separado) aparecendo minutos depois.
+-- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
+-- função entra ANTES dele — quem o empurrar para o meio desarma a cura para tudo
+-- que vier depois. (O último bloco do arquivo é a chamada das travas do suporte,
+-- migration 0274, que não cria função.)
+-- Vigiado por `tests/unit/varredura-anon-e-o-ultimo-bloco.test.ts`.
 --
--- Esta função transforma o despacho em ENSURE idempotente. A trava transacional
--- fecha a corrida entre duas reentregas, e a própria mensagem fornece todos os
--- ids do payload — o chamador não pode misturar contato/conversa/sessão.
-
-create or replace function public.fn_garantir_despacho_agente(
-  p_organization_id uuid,
-  p_message_id uuid,
-  p_source text,
-  p_request_id text default null
-) returns uuid
-language plpgsql
-security definer
-set search_path = public
-as $function$
+-- A 0108 revogou anon numa LISTA de 8 funções, medida num banco instalado do
+-- ZERO. Quem ATUALIZA tem outro estado: o `ALTER DEFAULT PRIVILEGES ... GRANT
+-- ALL ON FUNCTIONS TO anon` do corpo deste arquivo grava uma entrada em
+-- `pg_default_acl` que fica no catálogo PARA SEMPRE, e a partir daí toda função
+-- criada em `public` nasce com EXECUTE para anon — inclusive as deste apêndice.
+--
+-- Medido numa VPS real (2026-08-07), comparando com o que um install fresco
+-- produz: 6 definer expostas a anon e 5 a authenticated, entre elas
+-- `fn_decrypt_oauth` — alcançável pela anon key, que vai para o browser.
+--
+-- Lista conserta o estoque e reabre no próximo `create function`. Esta varredura
+-- é auto-curativa e roda DEPOIS de tudo que cria função, então cura no mesmo run
+-- em que o defeito nasceria. Desfazer o ALTER DEFAULT PRIVILEGES não serve: ele
+-- vem do `pg_dump` do Supabase e é reescrito a cada re-aplicação.
+--
+-- As duas origens de EXECUTE (a mesma lição da 0108): grant DIRETO a anon, que
+-- `revoke from public` não remove; e grant a PUBLIC, do qual anon HERDA, que
+-- `revoke from anon` não remove. O privilégio EFETIVO de authenticated e
+-- service_role é medido ANTES e devolvido depois — tira anon sem tirar leitura.
+do $$
 declare
-  v_message public.messages%rowtype;
-  v_event_id uuid;
+  f record;
+  tinha_auth boolean;
+  tinha_service boolean;
 begin
-  if p_organization_id is null or p_message_id is null then
-    raise exception 'dispatch_requires_org_and_message' using errcode = '22023';
+  if to_regrole('anon') is null then
+    return;
   end if;
 
-  perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text || ':' || p_message_id::text, 0));
+  for f in
+    select p.oid, p.oid::regprocedure as assinatura
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and p.prosecdef
+  loop
+    tinha_auth := to_regrole('authenticated') is not null
+                  and has_function_privilege('authenticated', f.oid, 'EXECUTE');
+    tinha_service := to_regrole('service_role') is not null
+                     and has_function_privilege('service_role', f.oid, 'EXECUTE');
 
-  select * into v_message
-    from public.messages
-   where organization_id = p_organization_id
-     and id = p_message_id
-     and direction = 'inbound';
-  if not found then
-    raise exception 'inbound_message_not_found_for_org' using errcode = 'P0001';
-  end if;
+    execute format('revoke execute on function %s from public, anon', f.assinatura);
 
-  select id into v_event_id
-    from public.event_log
-   where organization_id = p_organization_id
-     and event_type = 'ai_agent.dispatch_requested'
-     and entity_kind = 'message'
-     and entity_id = p_message_id
-   order by created_at asc, id asc
-   limit 1;
+    if tinha_auth then
+      execute format('grant execute on function %s to authenticated', f.assinatura);
+    end if;
+    if tinha_service then
+      execute format('grant execute on function %s to service_role', f.assinatura);
+    end if;
+  end loop;
+end $$;
 
-  if v_event_id is null then
-    insert into public.event_log
-      (organization_id, event_type, entity_kind, entity_id, payload, metadata)
-    values (
-      p_organization_id,
-      'ai_agent.dispatch_requested',
-      'message',
-      p_message_id,
-      jsonb_build_object(
-        'organization_id', p_organization_id,
-        'conversation_id', v_message.conversation_id,
-        'contact_id', v_message.contact_id,
-        'channel_session_id', v_message.channel_session_id,
-        'inbound_message_id', p_message_id
-      ),
-      jsonb_strip_nulls(jsonb_build_object(
-        'source', coalesce(nullif(p_source, ''), 'inbound_webhook'),
-        'request_id', p_request_id,
-        'emitted_at', extract(epoch from now())
-      ))
-    ) returning id into v_event_id;
-  end if;
+-- regra 2 (authenticated): as 5 que o update abriu e o install não abre. Aqui não
+-- cabe varredura — `authenticated` PRECISA de EXECUTE nos helpers de RLS e em
+-- `retrieve_top_k_chunks` (num install fresco ele tem). É julgamento por função,
+-- e o alvo de cada linha é o valor que um install fresco produz, medido.
+revoke execute on function public.fn_audit_log_row() from authenticated;
+revoke execute on function public.fn_decrypt_oauth(bytea) from authenticated;
+revoke execute on function public.fn_encrypt_oauth(text) from authenticated;
+revoke execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid) from authenticated;
+revoke execute on function public.fn_update_budget_consumption() from authenticated;
 
-  return v_event_id;
-end
-$function$;
-
-revoke all on function public.fn_garantir_despacho_agente(uuid, uuid, text, text) from public, anon, authenticated;
-grant execute on function public.fn_garantir_despacho_agente(uuid, uuid, text, text) to service_role;
-
-notify pgrst, 'reload schema';
+grant execute on function public.fn_audit_log_row() to service_role;
+grant execute on function public.fn_decrypt_oauth(bytea) to service_role;
+grant execute on function public.fn_encrypt_oauth(text) to service_role;
+grant execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid) to service_role;
+grant execute on function public.fn_update_budget_consumption() to service_role;

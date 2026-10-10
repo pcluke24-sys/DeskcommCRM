@@ -156,7 +156,7 @@ describe("pós-entrada de contato pessoal não gera nada", () => {
     expect(acelerarFollowupDoInbound, "follow-up quente não acorda").not.toHaveBeenCalled();
     expect(drenarEventosDoInbound, "nem o dreno do inbound roda").not.toHaveBeenCalled();
     expect(
-      rpcChamadas.filter((c) => c.args.p_event_type === "ai_agent.dispatch_requested"),
+      rpcChamadas.filter((c) => c.nome === "fn_garantir_despacho_agente"),
       "nenhum turno é enfileirado",
     ).toHaveLength(0);
     expect(audit, "nem auditoria de efeito").not.toHaveBeenCalled();
@@ -172,7 +172,7 @@ describe("pós-entrada de contato pessoal não gera nada", () => {
     );
     // ...mas mesmo bloqueando, nada além disso acontece.
     expect(
-      rpcChamadas.filter((c) => c.args.p_event_type === "ai_agent.dispatch_requested"),
+      rpcChamadas.filter((c) => c.nome === "fn_garantir_despacho_agente"),
     ).toHaveLength(0);
     expect(garantirLeadDaConversa).not.toHaveBeenCalled();
   });
@@ -185,7 +185,7 @@ describe("pós-entrada de contato pessoal não gera nada", () => {
     expect(acelerarFollowupDoInbound).toHaveBeenCalledTimes(1);
     expect(drenarEventosDoInbound).toHaveBeenCalledTimes(1);
     expect(
-      rpcChamadas.filter((c) => c.args.p_event_type === "ai_agent.dispatch_requested"),
+      rpcChamadas.filter((c) => c.nome === "fn_garantir_despacho_agente" && c.args.p_organization_id === ENTRADA.organizationId && c.args.p_message_id === ENTRADA.messageId),
     ).toHaveLength(1);
   });
 });
