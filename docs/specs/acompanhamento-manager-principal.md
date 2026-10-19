@@ -31,17 +31,19 @@ escritas diretas recusadas; revogação imediata; Inbox sem marcar lida; funil s
 Destino: núcleo (autorização e isolamento). Nenhuma extensão ou serviço pago novo.
 Sem publicação ou alteração de produção nesta etapa.
 
-## Evidência local em revisão
+## Evidência local validada
 
 Capturas com dados exclusivamente sintéticos, sem informações de clientes:
 
 - `evidence/manager-principal/inbox-somente-leitura.png`:
   mensagem carregada com contador de não lidas preservado.
 - `evidence/manager-principal/funis-somente-leitura.png`:
-  captura intermediária que expôs controles de criação ainda visíveis. A interface
-  foi corrigida; falta substituir pela prova visual da versão final.
+  funil e lead consultáveis sem Novo Lead, seleção ou arrasto de cards.
 
-Estas capturas não comprovam implantação nem conclusão da validação completa.
+E2E canônico em 19/10: cenário do manager aprovado (35,5s; rodada 52s).
+Também confirmou recusa HTTP 403 para marcar lida e administração, saída do
+acompanhamento e ausência da porta para manager de cliente. Build final passou.
+Estas capturas não comprovam implantação nem aprovação da suíte geral completa.
 
 ## Checklist do Sistema Vivo
 

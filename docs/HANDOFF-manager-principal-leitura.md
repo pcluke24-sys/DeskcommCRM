@@ -99,3 +99,52 @@ lockfile congelado. Script local fora do repo: ../manager-principal-linux-qa.sh.
 Não enfraquecer nem pular gates com base no resultado Windows.
 
 Rebuild e novo E2E ainda necessários após os ajustes de interface acima.
+
+## Validação após Docker ligado (19/10)
+
+- Banco descartável pg15: 37 casos em quatro arquivos passaram, incluindo os 13
+  novos casos de autorização, revogação e isolamento. Instalação/reaplicação e
+  três verificações do kit passaram com 167 policies.
+- Checkpoint local 8e4a5ba38 (sem push) corrige quatro cercas: regra central de
+  organização operante, consulta global fora da página tenant, rounded-md e
+  migration 9006 ANTES da varredura anon final. Rodada focada: 58/58.
+- Helper de apresentação tem oito casos passando; consulta falha fechada sem
+  derrubar página nem conceder acesso. Tradução e referência das capturas: 90/90.
+- Suíte ampla em Linux sobre checkpoint anterior foi interrompida após preservar
+  log ../manager-principal-linux-unit-parcial.log. NÃO é aprovação completa.
+  Falhas próprias identificadas foram corrigidas e revalidadas de forma focada.
+  Controle de conversão Meta executado na base be200a4c5 em /baseline descartável:
+  mesmo caso falha (expected ok, received skipped), 19 passam. Prova preservada
+  em ../manager-principal-meta-baseline.log. Não foi alterado esse código/teste.
+- Container crm-manager-qa-20261019 tem ambiente QA sem segredos. Imagem local de
+  reaproveitamento crm-manager-qa-local:20261019; nunca publicar. Script seguinte
+  ../manager-principal-linux-ui.sh valida URL local 55421 antes de build/E2E.
+- Ainda faltam build/typecheck final, E2E da interface final e suíte completa.
+  Capturas atuais são intermediárias e explicitamente documentadas assim.
+- Produção, VPS, Supabase Cloud e clientes não foram alterados.
+
+Tentativa Linux de build interrompida por pressão comprovada do limite de memória
+do próprio contêiner (memory.events max=1455137, sem OOM kill). Não é falha de
+código nem prova sobre produção. Contêiner UI parado para liberar recursos.
+Log: ../manager-principal-linux-ui-build-incompleto.log. Rebuild nativo Windows
+iniciado com e2e-build.sh canônico, Node heap 8GB, guarda de URL exata local 55421;
+log em ../manager-principal-e2e-build-final.log. Não repetir em paralelo.
+
+### Resultado final da prova de tela (19/10, 13h48 BRT)
+
+Build nativo final aprovado (compilação 86s, TypeScript 50s, 65 páginas e controle
+positivo do host 127.0.0.1:55421 no bundle). Cenário manager E2E APROVADO em 35,5s
+(rodada 52s): Inbox/mensagem lidos, não lidas=2 preservado, POST mark-read 403,
+admin 403, funil sem Novo Lead/drag, saída e manager cliente sem porta/API 403.
+Capturas finais substituídas e inspecionadas visualmente; só dados sintéticos.
+
+Fixture Principal f9060000-0000-4000-8000-000000000003 tinha zero memberships:
+ponteiro local retornado a NULL (estado anterior) e somente essa org removida.
+Contêineres crm-manager-ui-20261019 e crm-manager-qa-20261019 e imagem
+crm-manager-qa-local:20261019 removidos após guardar logs. São reproduzíveis pelos
+bundles/scripts locais; nenhum outro contêiner ou banco foi removido/reiniciado.
+
+Typecheck dedicado final APROVADO (exit 0, sem diagnósticos), log
+../manager-principal-typecheck-final.log.
+Rodada ampla NÃO aprovada. Falha Meta também reproduzida na base; não enfraquecer
+o gate nem misturar sua correção sem revisão. Tudo local, sem push/PR/deploy.
