@@ -41,6 +41,7 @@ export function PipelinePageClient({
   role: Role;
 }) {
   const t = useT();
+  const podeOperar = ROLE_RANK[role] >= ROLE_RANK.agent;
   const { data, isLoading, error, pulses, realtimeStatus, seguranca } = useBoard(pipelineId);
   const router = useRouter();
   const pathname = usePathname();
@@ -131,11 +132,13 @@ export function PipelinePageClient({
         <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">
           {data?.pipeline.name ?? initialName}
         </h1>
-        <Button onClick={() => setNewOpen(true)} disabled={!data} className="shrink-0">
-          <Plus size={16} className="mr-2" /> {t("Novo Lead")}
-        </Button>
+        {podeOperar && (
+          <Button onClick={() => setNewOpen(true)} disabled={!data} className="shrink-0">
+            <Plus size={16} className="mr-2" /> {t("Novo Lead")}
+          </Button>
+        )}
       </header>
-      {data && (
+      {data && podeOperar && (
         <NewLeadDialog
           open={newOpen}
           onOpenChange={setNewOpen}
@@ -171,16 +174,19 @@ export function PipelinePageClient({
           onSelectionChange={setSelectedIds}
           leadInicial={searchParams.get("lead")}
           podeRenomearEtapa={ROLE_RANK[role] >= ROLE_RANK.manager}
+          podeOperar={podeOperar}
         />
       )}
-      <BulkActionBar
-        selectedIds={selectedIds}
-        stages={data?.stages ?? []}
-        pipelineId={pipelineId}
-        vocabulary={data?.pipeline.vocabulary ?? null}
-        tagsExistentes={tagsDoQuadro}
-        onClear={() => setSelectedIds([])}
-      />
+      {podeOperar && (
+        <BulkActionBar
+          selectedIds={selectedIds}
+          stages={data?.stages ?? []}
+          pipelineId={pipelineId}
+          vocabulary={data?.pipeline.vocabulary ?? null}
+          tagsExistentes={tagsDoQuadro}
+          onClear={() => setSelectedIds([])}
+        />
+      )}
     </div>
   );
 }

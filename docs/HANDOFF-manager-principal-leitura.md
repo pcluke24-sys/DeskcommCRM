@@ -75,3 +75,27 @@ Ferramentas: usar Node direto (`node node_modules/vitest/vitest.mjs ...`), pois 
 do ambiente é v11 e tentou instalar/registrar symlink fora do sandbox. Git Bash
 funciona com execução autorizada fora do sandbox. Hooks de contribuidor armados.
 Não comprar planos, enviar WhatsApp ou modificar clientes nesta etapa.
+
+## Continuação da prova visual e de regressão
+
+Checkpoint local d3c085492 criado (sem push). Sabotagem da função pura confirmou
+exatamente 9 falhas / 1 aprovação; regra restaurada e 18/18 testes passaram.
+Build local anterior completo passou. Novo cenário E2E confirmou mensagem visível
+no Inbox e não lidas preservadas e abriu funil/lead/etapa; screenshots sintéticas
+em evidence/manager-principal foram inspecionadas. O cenário falhou depois em uma
+espera de 5s da troca de organização (origem/destino mesma URL). Esperas agora
+aguardam POST real e estado final, sem reenviar operações.
+
+A inspeção visual mostrou Novo Lead e arrasto ainda oferecidos a viewer:
+ajustados PipelinePageClient → KanbanBoard → StageColumn/KanbanCard/LeadDossier
+para leitura real da interface. Servidor/RLS já recusavam. 21/21 casos de funil
+e regressões existentes passaram após esse ajuste. Traduções da nova tela também
+foram acrescentadas seguindo a regra de i18n, sem trocar o português.
+
+Suíte unitária ampla no Windows esbarrou em caminhos Bash (C:\\... sem normalização)
+e varreduras dependentes de separador. Foi interrompida, não considerada verde.
+Preparar validação Linux em Docker sem socket/segredos, com bundle só do Git e
+lockfile congelado. Script local fora do repo: ../manager-principal-linux-qa.sh.
+Não enfraquecer nem pular gates com base no resultado Windows.
+
+Rebuild e novo E2E ainda necessários após os ajustes de interface acima.

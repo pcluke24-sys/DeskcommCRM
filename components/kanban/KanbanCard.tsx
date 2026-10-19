@@ -18,6 +18,7 @@ import { ContatoNoCard } from "./ContatoNoCard";
 export type GestoDeSelecao = "alterna" | "intervalo";
 
 interface KanbanCardProps {
+  podeOperar?: boolean;
   /** O que o card mostra — explicitamente NÃO é a linha do banco. */
   card: CardInput;
   /** A linha do lead, só para o menu de ações (que muta o lead). */
@@ -76,6 +77,7 @@ export function KanbanCard({
   pulseCount = 0,
   onSelect,
   onOpen,
+  podeOperar = true,
 }: KanbanCardProps) {
   const t = useT();
   const value = formatValor(card.valueCents, card.currency);
@@ -103,11 +105,7 @@ export function KanbanCard({
   // O título é o maior e mais natural alvo do card. Quem lê "Segurando Shift,
   // um clique seleciona tudo entre o card anterior e o que você clicou" e clica
   // no card clica no nome dele — e recebia o dossiê.
-  const decidirClique = (e: {
-    shiftKey: boolean;
-    metaKey: boolean;
-    ctrlKey: boolean;
-  }): void => {
+  const decidirClique = (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }): void => {
     if (e.shiftKey) {
       onSelect?.(card.id, "intervalo");
       return;
@@ -121,7 +119,7 @@ export function KanbanCard({
   const handleClick = (e: MouseEvent<HTMLDivElement>) => decidirClique(e);
 
   return (
-    <Draggable draggableId={card.id} index={index}>
+    <Draggable draggableId={card.id} index={index} isDragDisabled={!podeOperar}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -138,7 +136,7 @@ export function KanbanCard({
           title={card.tags.length > 0 ? `Tags: ${card.tags.join(", ")}` : undefined}
           className={cn(
             "group relative overflow-hidden rounded-md border border-border bg-surface",
-            "py-2.5 pl-3 pr-3 shadow-xs transition-colors",
+            "py-2.5 pr-3 pl-3 shadow-xs transition-colors",
             "hover:border-border-strong",
             snapshot.isDragging && "rotate-1 shadow-md ring-1 ring-accent/40",
             isSelected && "ring-2 ring-accent",
@@ -181,6 +179,7 @@ export function KanbanCard({
                   teclado. */}
               <input
                 type="checkbox"
+                disabled={!podeOperar}
                 checked={Boolean(isSelected)}
                 aria-label={`${t("Selecionar")}: ${card.title}`}
                 onClick={(e) => {
@@ -195,9 +194,8 @@ export function KanbanCard({
                 className={cn(
                   "mt-1 h-4 w-4 shrink-0 cursor-pointer accent-accent transition-opacity",
                   "focus:opacity-100 focus-visible:outline-2 focus-visible:outline-accent",
-                  isSelected || isSelecting
-                    ? "opacity-100"
-                    : "opacity-0 group-hover:opacity-100",
+                  !podeOperar && "invisible",
+                  isSelected || isSelecting ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                 )}
               />
               {card.canonicalTag && (
@@ -217,7 +215,7 @@ export function KanbanCard({
                   acessibilidade; deixar só onKeyDown daria uma ação que existe
                   e NÃO É DESCOBERTA por leitor de tela. O título como button
                   atende mouse, teclado e leitor sem desfazer a decisão antiga. */}
-              <h3 className="line-clamp-2 h-10 text-sm font-medium leading-5 text-text">
+              <h3 className="line-clamp-2 h-10 text-sm leading-5 font-medium text-text">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -234,13 +232,13 @@ export function KanbanCard({
                 </button>
               </h3>
             </div>
-            <KanbanCardActions lead={lead} pipelineId={pipelineId} />
+            {podeOperar && <KanbanCardActions lead={lead} pipelineId={pipelineId} />}
           </div>
 
           {/* ② valor — altura reservada mesmo sem valor, senão o card encolhe. */}
           <p
             className={cn(
-              "mt-1 h-5 text-xs font-medium leading-5 tabular-nums",
+              "mt-1 h-5 text-xs leading-5 font-medium tabular-nums",
               value ? "text-text" : "text-text-muted",
             )}
           >
@@ -264,12 +262,14 @@ export function KanbanCard({
             {state.slot.type === "reactivation" && (
               // O negócio parou E aqui está o que fazer. Mesma faixa, mesma
               // altura: o card não cresce quando o sistema tem algo a propor.
-              <ReactivationSlot
-                leadId={card.id}
-                proposalId={state.slot.proposalId}
-                expiresAt={state.slot.expiresAt}
-                pipelineId={pipelineId}
-              />
+              <fieldset disabled={!podeOperar} className="contents">
+                <ReactivationSlot
+                  leadId={card.id}
+                  proposalId={state.slot.proposalId}
+                  expiresAt={state.slot.expiresAt}
+                  pipelineId={pipelineId}
+                />
+              </fieldset>
             )}
             {state.slot.type === "cooling" && (
               // -fg é a variante de TEXTO do token (o -warning puro dá 3.7:1 em
@@ -306,7 +306,7 @@ export function KanbanCard({
               ownerName={card.owner.name}
               agentVersion={card.owner.agentVersion}
             />
-            <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-text-muted">
+            <span className="shrink-0 text-[11px] whitespace-nowrap text-text-muted tabular-nums">
               {state.showStageAge && age
                 ? `${age} ${t("em")} ${card.stageName}`
                 : `${t("em")} ${card.stageName}`}

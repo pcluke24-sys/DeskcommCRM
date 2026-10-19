@@ -36,6 +36,7 @@ interface StageColumnProps {
   onOpen?: (leadId: string) => void;
   /** `manager`+ — mesmo corte de papel da rota que renomeia a etapa. */
   podeRenomear?: boolean;
+  podeOperar?: boolean;
   onRenomear?: (nome: string) => void;
 }
 
@@ -52,6 +53,7 @@ export function StageColumn({
   onSelectMany,
   onOpen,
   podeRenomear = false,
+  podeOperar = true,
   onRenomear,
 }: StageColumnProps) {
   const t = useT();
@@ -173,7 +175,7 @@ export function StageColumn({
               ref={(el) => {
                 if (el) el.indeterminate = selecionadosAqui > 0 && !todosSelecionados;
               }}
-              disabled={idsVisiveis.length === 0}
+              disabled={!podeOperar || idsVisiveis.length === 0}
               onChange={alternarEtapa}
               aria-label={
                 todosSelecionados
@@ -183,6 +185,7 @@ export function StageColumn({
               className={cn(
                 "h-4 w-4 shrink-0 cursor-pointer accent-accent transition-opacity",
                 "focus:opacity-100 disabled:cursor-default",
+                !podeOperar && "invisible",
                 // `pointer-coarse:opacity-100` pelo mesmo motivo da caixa do
                 // card (ver `components/kanban/KanbanCard.tsx`): no toque o
                 // hover nunca acontece, e "selecionar a etapa inteira" é o gesto
@@ -230,7 +233,7 @@ export function StageColumn({
         </div>
       </div>
 
-      <Droppable droppableId={stage.id} type="LEAD">
+      <Droppable droppableId={stage.id} type="LEAD" isDropDisabled={!podeOperar}>
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
@@ -256,7 +259,8 @@ export function StageColumn({
                 isSelected={selectedLeadIds?.has(lead.id)}
                 isSelecting={(selectedLeadIds?.size ?? 0) > 0}
                 pulseCount={pulses?.get(lead.id) ?? 0}
-                onSelect={aoSelecionar}
+                onSelect={podeOperar ? aoSelecionar : undefined}
+                podeOperar={podeOperar}
                 onOpen={onOpen}
               />
             ))}

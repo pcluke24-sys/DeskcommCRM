@@ -5,12 +5,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { notifySupportTransition } from "@/components/app/ImpersonateBanner";
+import { useT } from "@/hooks/i18n/useT";
 
 const listaSchema = z.object({
   data: z.array(z.object({ id: z.string().uuid(), display_name: z.string() })),
 });
 
 export function AcompanharClientes() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -52,7 +54,7 @@ export function AcompanharClientes() {
       notifySupportTransition();
       window.location.assign("/app/inbox");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha de conexão.");
+      toast.error(err instanceof Error ? t(err.message) : t("Falha de conexão."));
       setBusy(false);
     }
   }
@@ -66,7 +68,7 @@ export function AcompanharClientes() {
           void abrir();
         }}
       >
-        Acompanhar clientes
+        {t("Acompanhar clientes")}
       </Button>
       <Dialog
         open={open}
@@ -75,27 +77,28 @@ export function AcompanharClientes() {
         }}
       >
         <DialogContent>
-          <DialogTitle>Acompanhar cliente — somente leitura</DialogTitle>
+          <DialogTitle>{t("Acompanhar cliente — somente leitura")}</DialogTitle>
           <DialogDescription>
-            Você poderá consultar conversas e funis por até uma hora. Não poderá enviar mensagens,
-            marcar conversas como lidas ou alterar dados. O acesso será registrado.
+            {t(
+              "Você poderá consultar conversas e funis por até uma hora. Não poderá enviar mensagens, marcar conversas como lidas ou alterar dados. O acesso será registrado.",
+            )}
           </DialogDescription>
           {loading ? (
-            <p role="status">Carregando clientes…</p>
+            <p role="status">{t("Carregando clientes…")}</p>
           ) : error ? (
             <div role="alert">
-              <p>{error}</p>
+              <p>{t(error)}</p>
               <Button
                 onClick={() => {
                   void abrir();
                 }}
               >
-                Tentar novamente
+                {t("Tentar novamente")}
               </Button>
             </div>
           ) : (
             <>
-              <label htmlFor="cliente-acompanhamento">Organização cliente</label>
+              <label htmlFor="cliente-acompanhamento">{t("Organização cliente")}</label>
               <select
                 id="cliente-acompanhamento"
                 value={selected}
@@ -103,21 +106,21 @@ export function AcompanharClientes() {
                 disabled={busy}
                 className="w-full rounded border bg-background p-2"
               >
-                <option value="">Selecione uma organização</option>
+                <option value="">{t("Selecione uma organização")}</option>
                 {clientes.map((cliente) => (
                   <option key={cliente.id} value={cliente.id}>
                     {cliente.display_name}
                   </option>
                 ))}
               </select>
-              {clientes.length === 0 && <p>Nenhum cliente ativo disponível.</p>}
+              {clientes.length === 0 && <p>{t("Nenhum cliente ativo disponível.")}</p>}
               <Button
                 disabled={!selected || busy}
                 onClick={() => {
                   void entrar();
                 }}
               >
-                {busy ? "Entrando…" : "Confirmar acompanhamento somente leitura"}
+                {busy ? t("Entrando…") : t("Confirmar acompanhamento somente leitura")}
               </Button>
             </>
           )}

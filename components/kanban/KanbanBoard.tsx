@@ -6,7 +6,11 @@ import { useT } from "@/hooks/i18n/useT";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { chaveDoQuadro, useBoard } from "@/hooks/kanban/useBoard";
-import { useMoveCard, type RecusaDeCampos, type RetomadaPendente } from "@/hooks/kanban/useMoveCard";
+import {
+  useMoveCard,
+  type RecusaDeCampos,
+  type RetomadaPendente,
+} from "@/hooks/kanban/useMoveCard";
 import { useRenameStage } from "@/hooks/kanban/useRenameStage";
 import { CamposObrigatoriosDialog } from "./CamposObrigatoriosDialog";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
@@ -23,6 +27,8 @@ import { LoseLeadDialog } from "./LoseLeadDialog";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 
 interface KanbanBoardProps {
+  /** Projeção da permissão da página; servidor e RLS continuam sendo autoridade. */
+  podeOperar?: boolean;
   pipelineId: string;
   /** Optional override: if provided, skips internal useBoard fetch. */
   stages?: Stage[];
@@ -70,7 +76,7 @@ function BoardSkeleton() {
       {[0, 1, 2].map((c) => (
         <div
           key={c}
-          className="flex w-80 shrink-0 flex-col gap-2 rounded-lg border border-border bg-surface-muted/40 p-3"
+          className="bg-surface-muted/40 flex w-80 shrink-0 flex-col gap-2 rounded-lg border border-border p-3"
         >
           <Skeleton className="h-5 w-32" />
           {[0, 1, 2, 3].map((i) => (
@@ -92,6 +98,7 @@ export function KanbanBoard({
   onSelectionChange,
   leadInicial,
   podeRenomearEtapa = false,
+  podeOperar = true,
 }: KanbanBoardProps) {
   const t = useT();
   const useExternal = stagesProp !== undefined && leadsProp !== undefined;
@@ -171,9 +178,7 @@ export function KanbanBoard({
   const isError = useExternal ? false : queryResult.isError;
   const error = useExternal ? null : queryResult.error;
 
-  const leadDoDossie = dossieId
-    ? (data?.leads.find((l) => l.id === dossieId) ?? null)
-    : null;
+  const leadDoDossie = dossieId ? (data?.leads.find((l) => l.id === dossieId) ?? null) : null;
 
   const grouped = useMemo(() => {
     if (!data) return null;
@@ -205,13 +210,10 @@ export function KanbanBoard({
 
   const handleDragEnd = useCallback(
     (result: DropResult) => {
-      if (!data || !grouped) return;
+      if (!podeOperar || !data || !grouped) return;
       const { source, destination, draggableId } = result;
       if (!destination) return;
-      if (
-        source.droppableId === destination.droppableId &&
-        source.index === destination.index
-      ) {
+      if (source.droppableId === destination.droppableId && source.index === destination.index) {
         return;
       }
 
@@ -227,9 +229,7 @@ export function KanbanBoard({
         setPerdaPendente({ leadId: lead.id });
         return;
       }
-      const destList = (grouped.get(destStageId) ?? []).filter(
-        (l) => l.id !== draggableId,
-      );
+      const destList = (grouped.get(destStageId) ?? []).filter((l) => l.id !== draggableId);
 
       const before = destination.index > 0 ? destList[destination.index - 1] : null;
       // `destList` sai do `grouped`, que a página já FILTROU. O de cima fica
@@ -269,7 +269,7 @@ export function KanbanBoard({
         expectedUpdatedAt: lead.updated_at,
       });
     },
-    [data, grouped, moveCard, qc, pipelineId],
+    [data, grouped, moveCard, qc, pipelineId, podeOperar],
   );
 
   if (isLoading) {
@@ -329,9 +329,10 @@ export function KanbanBoard({
             pulses={pulsesProp ?? queryResult.pulses}
             canonicalTags={canonicalTags}
             selectedLeadIds={selectedLeadIds}
-            onSelectMany={handleSelectMany}
+            onSelectMany={podeOperar ? handleSelectMany : undefined}
             onOpen={setDossieId}
             podeRenomear={podeRenomearEtapa}
+            podeOperar={podeOperar}
             onRenomear={(nome) => renameStage.mutate({ stageId: stage.id, name: nome })}
           />
         ))}
@@ -343,10 +344,9 @@ export function KanbanBoard({
           lead={leadDoDossie}
           pipelineId={pipelineId}
           fieldDefs={camposDoFunil(data.pipeline.settings ?? null)}
-          stageName={
-            data.stages.find((s) => s.id === leadDoDossie.stage_id)?.name ?? "—"
-          }
+          stageName={data.stages.find((s) => s.id === leadDoDossie.stage_id)?.name ?? "—"}
           ownerNames={ownerNames}
+          podeOperar={podeOperar}
         />
       )}
 
