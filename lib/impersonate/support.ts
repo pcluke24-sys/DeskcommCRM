@@ -7,6 +7,7 @@ export const supportSchema = z.object({
   auth_session_id: z.string().uuid(), previous_organization_id: z.string().uuid().nullable(),
   expires_at: z.string(), name: z.string(), locale: z.string().nullable(),
   access_mode: z.enum(["full", "support_readonly"]), status: z.enum(["active", "expired", "revoked"]),
+  actor_is_platform_admin: z.boolean().optional(),
 });
 export type SupportContext = z.infer<typeof supportSchema>;
 

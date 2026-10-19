@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": { "title": "Manager da Principal acompanha clientes em leitura" },
+  "lanes": [
+    { "id": "ui", "label": "Interface" },
+    { "id": "auth", "label": "Autorização e banco" }
+  ],
+  "mainPath": ["selector", "api", "session", "inbox"],
+  "nodes": [
+    { "id": "selector", "lane": "ui", "label": "TenantSwitcher / AcompanharClientes" },
+    {
+      "id": "api",
+      "lane": "auth",
+      "label": "/api/v1/acompanhamento: identidade validada + Principal"
+    },
+    {
+      "id": "authority",
+      "lane": "auth",
+      "label": "fn_manager_principal: vínculo aceito, manager, Principal ativa"
+    },
+    {
+      "id": "session",
+      "lane": "auth",
+      "label": "fn_start_support / fn_support_context: sessão e autoridade revalidadas"
+    },
+    { "id": "rls", "lane": "auth", "label": "RLS restritiva + requireSupportWrite: sem escrita" },
+    { "id": "inbox", "lane": "ui", "label": "Inbox e funil: viewer / support_readonly" },
+    { "id": "exit", "lane": "ui", "label": "ImpersonateBanner: saída ou expiração" },
+    { "id": "audit", "lane": "auth", "label": "api_audit_log: ator real e acompanhamento" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "selector", "to": "api" },
+    { "id": "e2", "from": "api", "to": "authority" },
+    { "id": "e3", "from": "authority", "to": "session" },
+    { "id": "e4", "from": "api", "to": "session" },
+    { "id": "e5", "from": "session", "to": "rls" },
+    { "id": "e6", "from": "session", "to": "inbox" },
+    { "id": "e7", "from": "rls", "to": "inbox" },
+    { "id": "e8", "from": "inbox", "to": "exit" },
+    { "id": "e9", "from": "exit", "to": "session" },
+    { "id": "e10", "from": "api", "to": "audit" },
+    { "id": "e11", "from": "exit", "to": "audit" }
+  ]
+}

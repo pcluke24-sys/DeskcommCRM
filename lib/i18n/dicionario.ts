@@ -15247,6 +15247,21 @@ export const DICIONARIO: Traducoes = {
   "Máximo de {n} caracteres.": { es: "Máximo de {n} caracteres." },
   "Salvar alíneas": { es: "Guardar las letras" },
   "Alíneas do art. 15.º salvas.": { es: "Las letras del art. 15.º quedaron guardadas." },
+  "Acompanhar clientes": { es: "Consultar clientes" },
+  "Acompanhar cliente — somente leitura": { es: "Consultar cliente — solo lectura" },
+  "Você poderá consultar conversas e funis por até uma hora. Não poderá enviar mensagens, marcar conversas como lidas ou alterar dados. O acesso será registrado.": { es: "Podrás consultar conversaciones y embudos durante un máximo de una hora. No podrás enviar mensajes, marcar conversaciones como leídas ni modificar datos. El acceso quedará registrado." },
+  "Carregando clientes…": { es: "Cargando clientes…" },
+  "Organização cliente": { es: "Organización cliente" },
+  "Selecione uma organização": { es: "Selecciona una organización" },
+  "Nenhum cliente ativo disponível.": { es: "No hay clientes activos disponibles." },
+  "Confirmar acompanhamento somente leitura": { es: "Confirmar consulta en modo de solo lectura" },
+  "Falha de conexão.": { es: "Error de conexión." },
+  "Não foi possível consultar os clientes. Confira seu acesso e tente novamente.": { es: "No se pudieron consultar los clientes. Revisa tu acceso e inténtalo de nuevo." },
+  "Não foi possível iniciar o acompanhamento.": { es: "No se pudo iniciar la consulta." },
+  "Acompanhamento disponível apenas para managers da Principal.": { es: "La consulta solo está disponible para gerentes de la organización principal." },
+  "Não foi possível confirmar o acesso ao acompanhamento.": { es: "No se pudo confirmar el acceso a la consulta." },
+  "Não foi possível iniciar. Confira seu acesso e a organização.": { es: "No se pudo iniciar. Revisa tu acceso y la organización." },
+  "Acompanhamento iniciado. Recarregue para confirmar.": { es: "Consulta iniciada. Recarga para confirmar." },
 };
 
 /**

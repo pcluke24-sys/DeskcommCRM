@@ -77,6 +77,7 @@ export async function audit(entry: AuditEntry): Promise<void> {
           if (support && support.organization_id === entry.organizationId) supportMetadata = {
             support_session_id: support.id, support_access_mode: support.access_mode,
             support_auth_session_id: support.auth_session_id,
+            support_actor_is_platform_admin: support.actor_is_platform_admin ?? true,
           };
         }
       }
@@ -93,7 +94,7 @@ export async function audit(entry: AuditEntry): Promise<void> {
       actor_ip: entry.ip ?? null,
       actor_user_agent: entry.userAgent ?? null,
       bypassed_rls: entry.bypassedRls ?? false,
-      acting_as_platform_admin: !!supportMetadata.support_session_id || (entry.actingAsPlatformAdmin ?? false),
+      acting_as_platform_admin: supportMetadata.support_actor_is_platform_admin ?? (!!supportMetadata.support_session_id || (entry.actingAsPlatformAdmin ?? false)),
     });
     if (error) {
       reportAuditFailure(error.message, entry);
