@@ -20,6 +20,63 @@ async function start(page:Page,org:string,readonly=false){
 }
 async function end(page:Page){await page.getByRole("button",{name:"Sair do acompanhamento"}).click();await page.waitForURL("**/app/inbox");await expect(page.getByRole("button",{name:"Sair do acompanhamento"})).toHaveCount(0);}
 
+test("manager da Principal acompanha cliente pela tela sem marcar conversa lida", async ({ page }) => {
+ test.setTimeout(120000);
+ const { data: primary, error: primaryError } = await db.from("platform_primary_organization").select("organization_id").eq("id", 1).single();
+ if (primaryError || !primary?.organization_id) throw new Error("Fixture local sem organização Principal configurada");
+ const suffix = randomUUID().slice(0, 8);
+ const email = `manager-primary-${suffix}@invariant.test`;
+ const created = await db.auth.admin.createUser({ email, password, email_confirm: true });
+ if (created.error || !created.data.user) throw created.error;
+ const actor = created.data.user.id;
+ let org: string | undefined;
+ try {
+  org = await insert("organizations", { slug: `manager-client-${suffix}`, display_name: `Cliente leitura ${suffix}`, legal_name: "Cliente sintético", onboarded_at: new Date().toISOString() });
+  await insert("user_organizations", { organization_id: primary.organization_id, user_id: actor, role: "manager", accepted_at: new Date().toISOString() });
+  const contact = await insert("contacts", { organization_id: org, name: `Contato leitura ${suffix}`, display_name: `Contato leitura ${suffix}`, force_human: true });
+  const channel = await insert("channel_sessions", { organization_id: org, waha_session_name: `manager-test-${suffix}`, display_name: "Canal sintético", status: "STOPPED", webhook_secret_encrypted: "\\x00" });
+  const conversation = await insert("conversations", { organization_id: org, contact_id: contact, channel_session_id: channel, status: "open", unread_count_for_assignee: 2, last_message_at: new Date().toISOString(), last_message_preview: "Mensagem sintética" });
+  await login(page, email);
+  await page.getByRole("button", { name: "Acompanhar clientes", exact: true }).click();
+  await page.getByLabel("Organização cliente", { exact: true }).selectOption(org);
+  await page.getByRole("button", { name: "Confirmar acompanhamento somente leitura", exact: true }).click();
+  await page.waitForURL("**/app/inbox");
+  await expect(page.getByRole("alert").filter({ hasText: /somente leitura/i })).toContainText(`Cliente leitura ${suffix}`);
+  const readRequests: string[] = [];
+  page.on("request", request => { if (request.method() === "POST" && request.url().includes("/mark-read")) readRequests.push(request.url()); });
+  await page.locator(`[data-conversation-id="${conversation}"]`).click();
+  // A janela excede o debounce de 1,5s do useMarkAsRead.
+  await page.waitForTimeout(2000);
+  expect(readRequests).toEqual([]);
+  expect((await db.from("conversations").select("unread_count_for_assignee").eq("id", conversation).single()).data?.unread_count_for_assignee).toBe(2);
+  expect((await page.request.post(`/api/v1/conversations/${conversation}/mark-read`, { data: {} })).status()).toBe(403);
+  expect((await page.request.get("/api/v1/admin/tenants")).status()).toBe(403);
+  mkdirSync("evidence/manager-principal", { recursive: true });
+  await page.screenshot({ path: "evidence/manager-principal/inbox-somente-leitura.png" });
+  await page.getByRole("link", { name: "Funis", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Funis", exact: true })).toBeVisible();
+  await expect(page.getByTestId("form-novo-funil")).toHaveCount(0);
+  await page.screenshot({ path: "evidence/manager-principal/funis-somente-leitura.png" });
+  await end(page);
+  await expect(page.getByRole("button", { name: "Acompanhar clientes", exact: true })).toBeVisible();
+  const changed = await db.from("user_organizations").update({ role: "agent" }).eq("organization_id", primary.organization_id).eq("user_id", actor);
+  if (changed.error) throw changed.error;
+  await insert("user_organizations", { organization_id: org, user_id: actor, role: "manager", accepted_at: new Date().toISOString() });
+  await page.reload();
+  await page.getByTestId("tenant-switcher").click();
+  await page.getByTestId(`tenant-switcher-item-${org}`).click();
+  await page.waitForURL("**/app/inbox");
+  await expect(page.getByTestId("tenant-switcher")).toContainText(`Cliente leitura ${suffix}`);
+  await expect(page.getByRole("button", { name: "Acompanhar clientes", exact: true })).toHaveCount(0);
+  expect((await page.request.get("/api/v1/acompanhamento")).status()).toBe(403);
+ } finally {
+  // Fecha somente a página deste teste antes de remover suas fixtures sintéticas.
+  await page.close();
+  if (org) { const result = await db.from("organizations").delete().eq("id", org); if (result.error) throw result.error; }
+  const result = await db.auth.admin.deleteUser(actor); if (result.error) throw result.error;
+ }
+});
+
 test("suporte mantém identidade, opera B e encerra sem misturar A; readonly/expiração/revogação são reais",async({page,browser})=>{
  test.setTimeout(240000);
  page.setDefaultTimeout(20000);

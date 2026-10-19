@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { setActiveOrg } from "@/app/actions/shell/setActiveOrg";
+import { AcompanharClientes } from "./AcompanharClientes";
 
 export function TenantSwitcher() {
   const t = useT();
@@ -37,9 +38,12 @@ export function TenantSwitcher() {
     }
   };
 
-  if (user.organizations.length <= 1 && !user.is_platform_admin) return null;
+  const podeAcompanhar = !user.support && !!user.primary_manager_organization_id && active?.orgId === user.primary_manager_organization_id;
+  if (user.organizations.length <= 1 && !user.is_platform_admin && !podeAcompanhar) return null;
 
   return (
+    <div className="flex items-center gap-1">
+    {podeAcompanhar && <AcompanharClientes />}
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {/*
@@ -95,5 +99,6 @@ export function TenantSwitcher() {
         </DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
+    </div>
   );
 }

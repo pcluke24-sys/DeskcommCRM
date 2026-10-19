@@ -273,6 +273,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // ou seja: o painel é IRMÃO do `AppShell`, não filho dele. Um provedor por
   // dentro do `VoiceCallProvider` deixaria o painel de fora — ele declararia o
   // que ocupa e ninguém descontaria, que é exatamente o defeito da #1305.
+  // Só a apresentação precisa desta consulta. Não acrescentar uma ida ao banco
+  // a loadAuthUser: isso cobraria cada requisição do Inbox de todo manager.
+  let primaryManagerOrg: string | null = null;
+  if (!user.support && activeOrg?.role === "manager") {
+    const { data: primary, error } = await createAdminClient()
+      .from("platform_primary_organization").select("organization_id").eq("id", 1).maybeSingle();
+    if (!error && primary?.organization_id === activeOrg.orgId) primaryManagerOrg = activeOrg.orgId;
+  }
+
   const shell = (
     <ProvedorDaOcupacaoDoRodape>
       <VoiceCallProvider>
@@ -291,7 +300,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // pergunta quem está logado. Ver `lib/i18n/IdiomaProvider`: foi o
     // acoplamento com a autenticação que derrubou 32 casos.
     <IdiomaProvider locale={user.idioma}>
-    <AuthProvider user={user} activeOrg={activeOrg}>
+    <AuthProvider user={{ ...user, primary_manager_organization_id: primaryManagerOrg }} activeOrg={activeOrg}>
       {/*
         A COR DA ETIQUETA, uma leitura por tela.
 

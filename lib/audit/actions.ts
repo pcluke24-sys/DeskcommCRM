@@ -180,6 +180,8 @@ export const AUDIT_ACTIONS = [
   "tenant.ai_module_updated",
   "platform_admin.tenant_health_viewed",
   "platform_admin.impersonate_started",
+  "support.manager_started",
+  "support.manager_ended",
   "platform_admin.impersonate_ended",
   "platform_admin.impersonate_misconfigured",
   "tenant.suspended",

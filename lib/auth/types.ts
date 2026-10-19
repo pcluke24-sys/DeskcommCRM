@@ -127,6 +127,8 @@ export interface UserOrgMembership {
 }
 
 export interface AuthUser {
+  /** Só a identidade da Principal, resolvida no servidor para managers ativos. Não concede acesso. */
+  primary_manager_organization_id?: string | null;
   support?: import("@/lib/impersonate/support").SupportContext | null;
   id: string;
   email: string;
