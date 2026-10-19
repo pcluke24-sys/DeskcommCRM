@@ -1,4 +1,5 @@
 import type { AuthUser } from "@/lib/auth/types";
+import { ehOperante } from "@/lib/organizacao/operante";
 
 /** Regra de entrada, não substitui a revalidação transacional no banco.
  * IDs e papéis vêm do servidor, nunca do body ou do seletor do navegador.
@@ -13,6 +14,6 @@ export function podeAcompanharComoManager(
     (membership) =>
       membership.organization_id === principalId &&
       membership.role === "manager" &&
-      membership.org_status === "active",
+      ehOperante(membership.org_status),
   );
 }

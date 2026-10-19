@@ -31,6 +31,18 @@ escritas diretas recusadas; revogação imediata; Inbox sem marcar lida; funil s
 Destino: núcleo (autorização e isolamento). Nenhuma extensão ou serviço pago novo.
 Sem publicação ou alteração de produção nesta etapa.
 
+## Evidência local em revisão
+
+Capturas com dados exclusivamente sintéticos, sem informações de clientes:
+
+- `evidence/manager-principal/inbox-somente-leitura.png`:
+  mensagem carregada com contador de não lidas preservado.
+- `evidence/manager-principal/funis-somente-leitura.png`:
+  captura intermediária que expôs controles de criação ainda visíveis. A interface
+  foi corrigida; falta substituir pela prova visual da versão final.
+
+Estas capturas não comprovam implantação nem conclusão da validação completa.
+
 ## Checklist do Sistema Vivo
 
 1. Entrada: `TenantSwitcher` / `AcompanharClientes` e identidade de `loadAuthUser`.

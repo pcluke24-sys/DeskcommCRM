@@ -15,6 +15,7 @@ import {
 import { cookieSecure } from "@/lib/supabase/cookie-secure";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { STATUS_OPERANTE } from "@/lib/organizacao/operante";
 
 const inputSchema = z.object({ organization_id: z.string().uuid() }).strict();
 
@@ -37,7 +38,7 @@ export async function GET() {
     const { data, error } = await createAdminClient()
       .from("organizations")
       .select("id, display_name")
-      .eq("status", "active")
+      .eq("status", STATUS_OPERANTE)
       .neq("id", actor.principalId)
       .order("display_name")
       .limit(500);

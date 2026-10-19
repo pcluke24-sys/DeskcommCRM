@@ -15,7 +15,10 @@ vi.mock("@/lib/supabase/admin", () => ({
     },
   }),
 }));
-import { managerDaPrincipal } from "./acompanhamento-principal-server";
+import {
+  managerDaPrincipal,
+  principalDoManagerNaApresentacao,
+} from "./acompanhamento-principal-server";
 beforeEach(() => {
   vi.clearAllMocks();
   h.user.mockResolvedValue({
@@ -50,4 +53,45 @@ it("manager em organização cliente é recusado", async () => {
   h.active.mockResolvedValue({ orgId: "cliente", role: "manager" });
   expect(await managerDaPrincipal()).toBeNull();
   expect(h.authority).not.toHaveBeenCalled();
+});
+
+it("apresenta a porta somente ao manager da Principal", async () => {
+  const user = await h.user();
+  expect(
+    await principalDoManagerNaApresentacao(user, {
+      orgId: "principal",
+      name: "Principal",
+      role: "manager",
+    }),
+  ).toBe("principal");
+  expect(
+    await principalDoManagerNaApresentacao(user, {
+      orgId: "cliente",
+      name: "Cliente",
+      role: "manager",
+    }),
+  ).toBeNull();
+});
+
+it("falha de apresentação não derruba a página nem concede acesso", async () => {
+  h.primary.mockRejectedValue(new Error("timeout"));
+  expect(
+    await principalDoManagerNaApresentacao(await h.user(), {
+      orgId: "principal",
+      name: "Principal",
+      role: "manager",
+    }),
+  ).toBeNull();
+});
+
+it("acompanhamento já ativo não oferece acompanhamento aninhado", async () => {
+  const user = { ...(await h.user()), support: { mode: "support_readonly" } };
+  expect(
+    await principalDoManagerNaApresentacao(user, {
+      orgId: "principal",
+      name: "Principal",
+      role: "manager",
+    }),
+  ).toBeNull();
+  expect(h.primary).not.toHaveBeenCalled();
 });

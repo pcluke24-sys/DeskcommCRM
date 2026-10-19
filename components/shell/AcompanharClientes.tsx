@@ -18,12 +18,12 @@ export function AcompanharClientes() {
   const [busy, setBusy] = useState(false);
   const [clientes, setClientes] = useState<z.infer<typeof listaSchema>["data"]>([]);
   const [selected, setSelected] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(false);
 
   async function abrir() {
     setOpen(true);
     setLoading(true);
-    setError("");
+    setError(false);
     setSelected("");
     setClientes([]);
     try {
@@ -33,8 +33,8 @@ export function AcompanharClientes() {
           "Não foi possível consultar os clientes. Confira seu acesso e tente novamente.",
         );
       setClientes(listaSchema.parse(await res.json()).data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha de conexão.");
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -87,7 +87,9 @@ export function AcompanharClientes() {
             <p role="status">{t("Carregando clientes…")}</p>
           ) : error ? (
             <div role="alert">
-              <p>{t(error)}</p>
+              <p>
+                {t("Não foi possível consultar os clientes. Confira seu acesso e tente novamente.")}
+              </p>
               <Button
                 onClick={() => {
                   void abrir();
@@ -104,7 +106,7 @@ export function AcompanharClientes() {
                 value={selected}
                 onChange={(e) => setSelected(e.target.value)}
                 disabled={busy}
-                className="w-full rounded border bg-background p-2"
+                className="w-full rounded-md border bg-background p-2"
               >
                 <option value="">{t("Selecione uma organização")}</option>
                 {clientes.map((cliente) => (

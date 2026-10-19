@@ -1,6 +1,26 @@
 import { loadAuthUser, orgAtivaSemPortao } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { podeAcompanharComoManager } from "./acompanhamento-principal";
+import type { ActiveOrg, AuthUser } from "@/lib/auth/types";
+
+/** Controle global server-only, não uma consulta de dados da organização ativa.
+ * A página recebe somente a capacidade de exibir a porta; a API revalida tudo.
+ */
+export async function principalDoManagerNaApresentacao(user: AuthUser, active: ActiveOrg | null) {
+  if (!active || active.role !== "manager" || user.support) return null;
+  try {
+    const { data, error } = await createAdminClient()
+      .from("platform_primary_organization")
+      .select("organization_id")
+      .eq("id", 1)
+      .maybeSingle();
+    if (error || !podeAcompanharComoManager(user, data?.organization_id, active.orgId)) return null;
+    return active.orgId;
+  } catch {
+    // Consulta de apresentação opcional: falha não derruba o CRM nem concede acesso.
+    return null;
+  }
+}
 
 /** Falha de consulta não vira autorização. O cliente nunca escolhe a Principal. */
 export async function managerDaPrincipal() {
