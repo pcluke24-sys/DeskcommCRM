@@ -17,7 +17,7 @@
  * pergunta pela capacidade `reportConversion` do adapter. O provider concreto
  * aparece aqui só porque é ele quem implementa a capacidade hoje.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { conversaoDeVendaHandler } from "@/lib/conversoes/envio.handler";
 import { conversaoDeEtapaMetaHandler } from "@/lib/conversoes/etapa-meta.handler";
@@ -396,6 +396,12 @@ describe("o evento de ETAPA da Meta também sai pelo canal", () => {
   beforeEach(() => {
     gravados.length = 0;
     tabelasLidas.length = 0;
+    // O cenário testa o transporte, não a passagem do calendário real. A Meta
+    // recusa eventos acima de sete dias; o controle abaixo mantém essa guarda.
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse(ENTROU_NA_ETAPA) + 60_000);
+  });
+  afterEach(() => {
+    vi.mocked(Date.now).mockRestore();
   });
 
   it("sem conexão direta e com a chave ligada: sai pelo canal com o nome padrão, o instante da etapa e sem valor", async () => {
@@ -456,6 +462,24 @@ describe("o evento de ETAPA da Meta também sai pelo canal", () => {
     expect(f).toHaveBeenCalledOnce();
     expect(String(f.mock.calls[0]![0])).toContain("graph.facebook.com");
     expect(String(f.mock.calls[0]![0])).not.toContain("/v1/whatsapp/conversions");
+  });
+
+  it("com a conexão direta ligada, evento acima de sete dias continua recusado sem chamar a rede", async () => {
+    vi.mocked(Date.now).mockReturnValue(Date.parse(ENTROU_NA_ETAPA) + 8 * 24 * 60 * 60 * 1000);
+    vi.mocked(createAdminClient).mockReturnValue(
+      fakeAdmin({ sessao: CANAL_COM_PONTE, conexao: "ligada", extras: regraDaEtapa() }) as never,
+    );
+    const f = vi.spyOn(globalThis, "fetch");
+
+    const r = await conversaoDeEtapaMetaHandler.handle(entrouNaEtapa);
+
+    expect(r).toMatchObject({ status: "skipped", detail: "recusado_pela_plataforma" });
+    expect(f).not.toHaveBeenCalled();
+    expect(gravados.at(-1)).toMatchObject({
+      status: "error",
+      reason: "recusado_pela_plataforma",
+      detail: expect.stringContaining("evento com 8 dias"),
+    });
   });
 
   it("o reprocessamento de uma etapa parada em `sem_conexao` sai pelo canal com o RETRATO, não com a regra de agora", async () => {
