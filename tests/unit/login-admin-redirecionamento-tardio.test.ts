@@ -8,8 +8,8 @@ vi.mock("../e2e/utils/totp", () => ({
 }));
 beforeEach(() => vi.resetModules());
 
-function pagina(redireciona: boolean) {
-  let destino = "http://localhost/login/mfa";
+function pagina(redireciona: boolean, inicial = "http://localhost/login/mfa") {
+  let destino = inicial;
   const campo = { waitFor: vi.fn(), isDisabled: async () => false, click: vi.fn() };
   const page = {
     url: () => destino,
@@ -34,6 +34,11 @@ describe("helper MFA reconhece conclusão tardia, sem aceitar falha", () => {
   it("continua recusando quando a página nunca sai do MFA", async () => {
     const { tentarMfa } = await import("../e2e/helpers/login-admin");
     const { page } = pagina(false);
+    expect(await tentarMfa(page as unknown as Page, "segredo-sintetico", 1)).toBe(false);
+  });
+  it("não confunde o destino na query com um login concluído", async () => {
+    const { tentarMfa } = await import("../e2e/helpers/login-admin");
+    const { page } = pagina(false, "http://localhost/login/mfa?next=/app/inbox");
     expect(await tentarMfa(page as unknown as Page, "segredo-sintetico", 1)).toBe(false);
   });
 });
