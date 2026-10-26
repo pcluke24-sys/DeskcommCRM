@@ -66,4 +66,17 @@ Decisão implementada localmente:
 
 Checklist complementar: entrada = settings do funil autorizado; saída = rascunho no editor oficial e `salvarRegrasDeConversaoMeta`; auditoria existente dessa ação permanece; superfície = Configurações > Conversões; falha = toast sem falso sucesso; anti-morte = retries oficiais sem alteração; continuidade = critérios para `suggestQualification` mantidos; retorno = avisos na tela e Histórico oficiais; mapa `eventos-meta-funil.architecture.json` atualizado. Núcleo, sem novo módulo ou dependência paga.
 
-Validação da segunda etapa: em execução; resultados finais devem ser registrados antes de declarar prontidão. Produção permanece intocada.
+Validação da segunda etapa:
+
+- 333 casos em 9 arquivos de regressão aprovados: editor, preservação de settings, consumidor oficial, entrega, formulários, schema, mapas, cobertura E2E e traduções.
+- 3 casos do auxiliar de MFA aprovados: conclusão tardia, permanência no MFA e URL de retorno na query. Total focado: 336 casos em 10 arquivos; não é a suíte unitária inteira.
+- Controle negativo do editor após checkpoint `1357033e8`: retirar a trava de exigência de valor produz exatamente 1 falha e 30 aprovações no recorte editor/traduções. Código restaurado; bateria final aprovada.
+- Typecheck completo e build local de produção aprovados. ESLint dos arquivos alterados sem erros ou avisos; verificações de canal e papel aprovadas, fragmentos válidos sem gerar versão.
+- Playwright `conversoes-editor-unico.spec.ts`: aprovado no build final. Login real com MFA; critérios gravados e relidos; mapa e marco antigos iguais aos originais; botão de salvar sai do estado pendente; rascunho liga somente a etapa compatível; nenhuma linha oficial criada sem salvar.
+- Capturas sintéticas conferidas: `evidence/consolidacao-meta/regras-preservadas.png`, `rascunho-oficial.png` e `editor-unico.png`.
+- Preparo inicial do teste corrigiu um slug de fixture acima do limite. Uma tentativa revelou artefato anterior com texto de contador desatualizado; novo build passou. Outra cancelou o POST ainda em andamento após 5 s; a espera agora exige conclusão em até 30 s, mantendo a asserção de leitura do dado salvo.
+- Detectado e corrigido um defeito no auxiliar de MFA dos testes: se a verificação concluísse durante a espera da próxima janela, o helper procurava os dígitos numa tela que já havia saído. O reconhecimento considera o pathname autenticado real, nunca o destino na query. Nenhuma guarda do produto foi alterada.
+- Controle negativo desse auxiliar após checkpoint `e333697b6`: remover o reconhecimento da conclusão tardia produz 1 falha e 2 aprovações, exatamente no caso esperado. Código restaurado em seguida.
+- O ambiente local registrou Redis indisponível com fallback e, em uma tentativa, erro genérico de leitura de contexto de suporte. Não se atribuiu essa falha à Meta, nem se contornou autenticação. Não foi uma prova de estabilidade de produção.
+
+Não executados nesta etapa: suíte unitária integral, suíte completa de invariantes, CI remoto e envio real à Meta. Nenhum schema, credencial, dado ou serviço de produção foi modificado. A implantação e a ativação/revisão das regras oficiais em produção continuam pendentes de autorização e gates. Não foi medida redução de RAM da VPS.
