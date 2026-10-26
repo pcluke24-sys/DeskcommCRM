@@ -57,12 +57,6 @@ export async function updatePipelineConfig(
   const nextSettings: Record<string, unknown> = { ...currentSettings };
   if (parsed.data.fields !== undefined) nextSettings.fields = parsed.data.fields;
   if (parsed.data.lost_reasons !== undefined) nextSettings.lost_reasons = parsed.data.lost_reasons;
-  if (parsed.data.meta_conversion_rules !== undefined) {
-    nextSettings.meta_conversion_rules = parsed.data.meta_conversion_rules;
-    // O worker usa este marco para nunca transformar o cadastro da feature em
-    // um reenvio retroativo de todo o historico do funil.
-    nextSettings.meta_conversion_activated_at = new Date().toISOString();
-  }
   if (parsed.data.qualification_policy !== undefined) {
     nextSettings.qualification_policy = parsed.data.qualification_policy;
   }
@@ -95,10 +89,6 @@ export async function updatePipelineConfig(
       vocabulary_changed: !!parsed.data.vocabulary,
       fields_count: parsed.data.fields?.length ?? null,
       lost_reasons_count: parsed.data.lost_reasons?.length ?? null,
-      meta_conversion_rules_count:
-        parsed.data.meta_conversion_rules === undefined
-          ? null
-          : Object.keys(parsed.data.meta_conversion_rules).length,
       qualification_policy_changed: parsed.data.qualification_policy !== undefined,
       won_reasons_count: parsed.data.won_reasons?.length ?? null,
       won_reason_required: parsed.data.won_reason_required ?? null,

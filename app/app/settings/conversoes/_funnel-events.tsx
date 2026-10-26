@@ -1,14 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { updatePipelineConfig } from "@/app/actions/settings/updatePipelineConfig";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
@@ -24,17 +22,7 @@ export interface FunilParaConversoes {
   disqualifiedDescription: string;
 }
 
-const SUGESTOES = [
-  "Contact",
-  "Lead",
-  "QualifiedLead",
-  "Schedule",
-  "AppointmentAttended",
-  "DisqualifiedLead",
-  "Purchase",
-] as const;
-
-export function EventosDoFunil({
+export function CriteriosDoFunil({
   funis,
   idioma,
 }: {
@@ -45,10 +33,10 @@ export function EventosDoFunil({
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-lg font-semibold">{t("Eventos por etapa do funil")}</h2>
+        <h2 className="text-lg font-semibold">{t("Critérios de qualificação do funil")}</h2>
         <p className="max-w-3xl text-sm text-muted-foreground">
           {t(
-            "Escolha o sinal enviado quando um negócio entra em cada etapa. Cada evento sai uma única vez por negócio e somente depois de salvar esta configuração.",
+            "Estes critérios orientam a sugestão de qualificação. Os eventos enviados à Meta são configurados no editor oficial de regras por etapa.",
           )}
         </p>
       </div>
@@ -62,92 +50,61 @@ export function EventosDoFunil({
 function EditorDoFunil({ funil, idioma }: { funil: FunilParaConversoes; idioma: Idioma }) {
   const t = (texto: string) => traduzir(texto, idioma);
   const [isPending, startTransition] = useTransition();
-  const [rules, setRules] = useState(funil.rules);
   const [qualified, setQualified] = useState(funil.qualifiedDescription);
   const [disqualified, setDisqualified] = useState(funil.disqualifiedDescription);
 
-  const rulesLimpas = useMemo(
-    () => Object.fromEntries(Object.entries(rules).filter(([, regra]) => regra.event_name.trim())),
-    [rules],
+  const regrasAntigas = Object.entries(funil.rules).filter(
+    ([, regra]) => typeof regra?.event_name === "string" && regra.event_name.trim(),
   );
 
   function salvar() {
     startTransition(async () => {
       const resultado = await updatePipelineConfig(funil.id, {
-        meta_conversion_rules: rulesLimpas,
         qualification_policy: {
           qualified_description: qualified,
           disqualified_description: disqualified,
         },
       });
       if (!resultado.ok) {
-        toast.error(t("Não consegui salvar os eventos deste funil."));
+        toast.error(t("Não consegui salvar os critérios deste funil."));
         return;
       }
-      toast.success(t("Eventos do funil salvos. Os próximos movimentos já usam este mapa."));
+      toast.success(t("Critérios do funil salvos."));
     });
   }
 
   return (
-    <Card className="flex flex-col gap-5 p-6">
+    <Card className="flex flex-col gap-5 p-6" data-testid={`criterios-funil-${funil.id}`}>
       <div>
         <h3 className="font-medium">{funil.name}</h3>
-        <p className="text-xs text-muted-foreground">
-          {t("Deixe o evento vazio quando a etapa não deve ensinar nada à plataforma.")}
-        </p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        {funil.stages.map((stage) => {
-          const regra = rules[stage.id] ?? { event_name: "", requires_value: false };
-          return (
-            <div
-              key={stage.id}
-              className="grid gap-3 rounded-md border p-4 md:grid-cols-[minmax(160px,1fr)_minmax(220px,1fr)_auto] md:items-end"
-            >
-              <div>
-                <Label>{t("Etapa")}</Label>
-                <p className="mt-2 text-sm font-medium">{stage.name}</p>
+      {regrasAntigas.length > 0 && (
+        <section
+          className="rounded-md border border-border p-4 text-sm"
+          data-testid="regras-meta-antigas"
+        >
+          <h4 className="font-medium">{t("Regras antigas — somente consulta")}</h4>
+          <p className="mt-1 text-muted-foreground">
+            {t(
+              "Estas regras foram preservadas, mas não são usadas pelo envio atual. Revise os eventos no editor oficial antes de ativá-los. Nada é convertido ou enviado automaticamente.",
+            )}
+          </p>
+          <dl className="mt-3 space-y-1">
+            {regrasAntigas.map(([stageId, regra]) => (
+              <div key={stageId}>
+                <dt className="inline font-medium">
+                  {funil.stages.find((s) => s.id === stageId)?.name ?? stageId}:{" "}
+                </dt>
+                <dd className="inline">
+                  {regra.event_name}
+                  {regra.requires_value ? ` · ${t("Exigir valor")}` : ""}
+                </dd>
               </div>
-              <div>
-                <Label htmlFor={`meta-event-${stage.id}`}>{t("Evento enviado")}</Label>
-                <Input
-                  id={`meta-event-${stage.id}`}
-                  list="meta-event-suggestions"
-                  maxLength={40}
-                  value={regra.event_name}
-                  placeholder={t("Nenhum evento")}
-                  onChange={(event) =>
-                    setRules((current) => ({
-                      ...current,
-                      [stage.id]: { ...regra, event_name: event.target.value },
-                    }))
-                  }
-                />
-              </div>
-              <div className="flex min-h-10 items-center gap-2">
-                <Switch
-                  id={`meta-value-${stage.id}`}
-                  checked={regra.event_name === "Purchase" || regra.requires_value}
-                  disabled={regra.event_name === "Purchase"}
-                  onCheckedChange={(checked) =>
-                    setRules((current) => ({
-                      ...current,
-                      [stage.id]: { ...regra, requires_value: checked },
-                    }))
-                  }
-                />
-                <Label htmlFor={`meta-value-${stage.id}`}>{t("Exigir valor")}</Label>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <datalist id="meta-event-suggestions">
-        {SUGESTOES.map((nome) => (
-          <option key={nome} value={nome} />
-        ))}
-      </datalist>
+            ))}
+          </dl>
+        </section>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-2">
@@ -176,7 +133,7 @@ function EditorDoFunil({ funil, idioma }: { funil: FunilParaConversoes; idioma: 
 
       <div>
         <Button onClick={salvar} disabled={isPending}>
-          {isPending ? t("Salvando…") : t("Salvar eventos e critérios")}
+          {isPending ? t("Salvando…") : t("Salvar critérios")}
         </Button>
       </div>
     </Card>

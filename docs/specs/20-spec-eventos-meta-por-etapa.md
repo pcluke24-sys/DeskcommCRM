@@ -2,17 +2,17 @@
 
 ## Resultado contratado
 
-Cada organização mantém sua própria credencial, Dataset/Pixel e código de teste da Meta. Em cada funil, um administrador pode associar livremente uma etapa a um nome de evento válido. Ao nascer ou entrar nessa etapa, o lead gera no máximo uma conversão com aquele nome.
+Cada organização mantém sua própria credencial, Dataset/Pixel e código de teste da Meta. Na consolidação autorizada em 26/10/2026, os eventos de etapa passam a ter um único editor, o oficial (`_regrasMeta.tsx`). A lista vigente é `EVENTOS_DA_META` em `lib/conversoes/regras-meta.ts`. Ganho continua no consumidor de compra; perda não gera evento de etapa.
 
-Sugestões visíveis na tela: `Contact`, `Lead`, `QualifiedLead`, `Schedule`, `AppointmentAttended`, `DisqualifiedLead` e `Purchase`. Os nomes não são fixos. `Purchase` sempre exige valor positivo e moeda; o transporte converte centavos para o número decimal esperado pela Meta.
+As configurações livres antigas em `crm_pipelines.settings.meta_conversion_rules` ficam somente para consulta, sem apagamento ou conversão automática. `Contact`, `Schedule` e `DisqualifiedLead` não são traduzidos por suposição. Regras com nome oficial idêntico, sem exigência de valor e sem regra oficial prévia podem ser aproveitadas como rascunho, apenas para etapas abertas. O rascunho não grava nem ativa nada: o administrador revisa e salva pelo caminho oficial. Regras oficiais desligadas não são reativadas por esse aproveitamento.
 
 ## Atribuição e entrega
 
 - Prioridade inicial: campanhas click-to-WhatsApp, usando o `ctwa_clid` já capturado no contato.
 - O envio usa `action_source=business_messaging`, `messaging_channel=whatsapp` e o Dataset da organização ativa.
 - Eventos sem atribuição permanecem visíveis como não reportados; não inventamos uma atribuição.
-- O worker envia fora da ação do usuário, com retry e livro-razão. `event_id` é `lead:evento`, portanto voltar e avançar o card não duplica o mesmo evento.
-- Salvar o mapa grava um marco de ativação. Eventos anteriores a esse instante não são enviados.
+- O worker oficial envia fora da ação do usuário, com retry e livro-razão `ad_conversion_dispatches`. A chave da etapa é `MetaEtapa:<stage_id>`; `Purchase` continua separado, sem reescrita de envios anteriores.
+- Salvar as regras oficiais mantém o marco antirretroativo implementado nesse caminho. Aproveitar um rascunho ou salvar critérios não altera o marco antigo nem ativa envios.
 
 ## Qualificação assistida
 

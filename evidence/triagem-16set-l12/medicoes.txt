@@ -193,3 +193,6 @@ L12.G2.2 · 400px tema escuro · documento: scrollWidth=400 clientWidth=400 tran
 etapa · opções = ["Datos incompletos","Pedido confirmado","Cancelado"]
 etapa · POST /api/v1/leads/bulk = 200
 etapa · atividades stage_changed = [{"type":"stage_changed","payload":{"bulk":true,"pipeline_id":"145c499f-a249-4ec9-a1fe-bd06a332ce8e","to_stage_id":"65ba4a66-6de7-4555-858f-ceab48efc95f","from_stage_id":"767fa245-4908-4ef1-b6ff-636f3e4d1dc1"}}]
+etapa · opções = ["Datos incompletos","Pedido confirmado","Cancelado"]
+etapa · POST /api/v1/leads/bulk = 200
+etapa · atividades stage_changed = [{"type":"stage_changed","payload":{"bulk":true,"pipeline_id":"05b884fb-8f44-427f-8216-ac2767169feb","to_stage_id":"664fd9ac-142d-42d8-a7e8-470bcb93966c","from_stage_id":"7280ef07-1ac9-4000-a93d-fb6259940985"}}]

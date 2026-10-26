@@ -60,35 +60,6 @@ import { lerRegistro, registraEnvio } from "./registro-de-envio";
 
 const CONSUMER_KEY = "conversoes.venda";
 
-type RegraDeConversaoLegada = { event_name: string; requires_value?: boolean };
-
-/** Compatibilidade de leitura das regras antigas do funil durante a migração. */
-function configuracaoDoFunil(settings: unknown): {
-  regras: Record<string, RegraDeConversaoLegada>;
-  ativadaEm: Date | null;
-} {
-  const s = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
-  const regrasCruas =
-    s.meta_conversion_rules && typeof s.meta_conversion_rules === "object"
-      ? (s.meta_conversion_rules as Record<string, unknown>)
-      : {};
-  const regras: Record<string, RegraDeConversaoLegada> = {};
-  for (const [stageId, valor] of Object.entries(regrasCruas)) {
-    if (!valor || typeof valor !== "object") continue;
-    const regra = valor as Record<string, unknown>;
-    if (typeof regra.event_name !== "string" || !regra.event_name.trim()) continue;
-    regras[stageId] = {
-      event_name: regra.event_name.trim(),
-      requires_value: regra.requires_value === true,
-    };
-  }
-  const data =
-    typeof s.meta_conversion_activated_at === "string"
-      ? new Date(s.meta_conversion_activated_at)
-      : null;
-  return { regras, ativadaEm: data && !Number.isNaN(data.getTime()) ? data : null };
-}
-
 /** Backoff do transitório. O drain reagenda sem contar tentativa. */
 const ESPERA_PADRAO_MS = 5 * 60 * 1000;
 
@@ -564,5 +535,3 @@ export const conversaoDeVendaHandler: EventHandler = {
   events: ["lead.won", "lead.stage_changed", "ad_conversion.retry_requested"],
   handle,
 };
-
-export const INTERNOS = { configuracaoDoFunil } as const;

@@ -70,8 +70,12 @@ export function semearCredenciais(): CredsE2E {
 
 let ultimoCodigoEnviado: string | null = null;
 
-async function tentarMfa(page: Page, secret: string, tentativas: number): Promise<boolean> {
+export async function tentarMfa(page: Page, secret: string, tentativas: number): Promise<boolean> {
   for (let i = 0; i < tentativas; i++) {
+    // A verificação anterior pode concluir durante a espera da próxima janela.
+    // O mesmo destino que confirma sucesso abaixo dispensa digitar outro código
+    // numa tela de MFA que já saiu — sem alterar a autenticação do produto.
+    if (new URL(page.url()).pathname.startsWith("/app/")) return true;
     if (msUntilNextTotpWindow() < 3_000 || generateTotp(secret) === ultimoCodigoEnviado) {
       await page.waitForTimeout(msUntilNextTotpWindow() + 300);
     }
@@ -87,7 +91,7 @@ async function tentarMfa(page: Page, secret: string, tentativas: number): Promis
     await digito.click();
     await page.keyboard.type(codigo, { delay: 40 });
     try {
-      await page.waitForURL(/\/app\//, { timeout: 10_000 });
+      await page.waitForURL((url) => url.pathname.startsWith("/app/"), { timeout: 10_000 });
       return true;
     } catch {
       await page.waitForTimeout(msUntilNextTotpWindow() + 300);

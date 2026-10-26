@@ -21,7 +21,7 @@
       "col": 1,
       "type": "frontend",
       "label": "Configuração por funil",
-      "sublabel": "etapa → nome livre de evento; marco antirretroativo"
+      "sublabel": "editor oficial; regras antigas somente consulta"
     },
     {
       "id": "analise",
@@ -44,7 +44,7 @@
       "lane": "produto",
       "col": 1,
       "type": "service",
-      "label": "updatePipelineConfig",
+      "label": "salvarRegrasDeConversaoMeta",
       "sublabel": "schema estrito + audit"
     },
     {
@@ -61,15 +61,31 @@
       "col": 3,
       "type": "service",
       "label": "event_log",
-      "sublabel": "lead.created · lead.stage_changed · lead.won"
+      "sublabel": "lead.stage_changed · lead.won"
     },
     {
       "id": "worker",
       "lane": "produto",
       "col": 4,
       "type": "service",
-      "label": "conversoes.venda",
-      "sublabel": "mapa + ativação + retry + dedupe"
+      "label": "conversoes.etapa_meta / venda",
+      "sublabel": "consumidores oficiais; ativação + retry + dedupe"
+    },
+    {
+      "id": "regras",
+      "lane": "dados",
+      "col": 2,
+      "type": "database",
+      "label": "meta_ads_conversion_rules",
+      "sublabel": "somente eventos oficiais; escolha humana"
+    },
+    {
+      "id": "criterios",
+      "lane": "produto",
+      "col": 2,
+      "type": "service",
+      "label": "updatePipelineConfig",
+      "sublabel": "salva critérios sem reescrever regras antigas"
     },
     {
       "id": "pipelines",
@@ -77,15 +93,15 @@
       "col": 1,
       "type": "database",
       "label": "crm_pipelines.settings",
-      "sublabel": "regras e critérios por funil"
+      "sublabel": "critérios; regras antigas preservadas"
     },
     {
       "id": "ledger",
       "lane": "dados",
       "col": 4,
       "type": "database",
-      "label": "conversion_events",
-      "sublabel": "evento único por lead e organização"
+      "label": "ad_conversion_dispatches",
+      "sublabel": "MetaEtapa:stage_id; Purchase separado"
     },
     {
       "id": "cofre",
@@ -114,7 +130,9 @@
   ],
   "edges": [
     { "id": "e1", "from": "mapa", "to": "settings", "label": "salvar regras e critérios" },
-    { "id": "e2", "from": "settings", "to": "pipelines", "label": "settings jsonb da organização" },
+    { "id": "e2", "from": "settings", "to": "regras", "label": "salva regras oficiais da organização" },
+    { "id": "e15", "from": "mapa", "to": "criterios", "label": "salvar apenas critérios" },
+    { "id": "e16", "from": "criterios", "to": "pipelines", "label": "preserva regras e marco antigos" },
     { "id": "e3", "from": "pipelines", "to": "analise", "label": "descrição da qualificação" },
     { "id": "e4", "from": "analise", "to": "sugestao", "label": "solicitação explícita" },
     { "id": "e5", "from": "sugestao", "to": "ia", "label": "critérios + conversa" },
@@ -122,7 +140,7 @@
     { "id": "e7", "from": "analise", "to": "movimento", "label": "humano decide" },
     { "id": "e8", "from": "movimento", "to": "eventlog", "label": "evento canônico" },
     { "id": "e9", "from": "eventlog", "to": "worker", "label": "drain assíncrono" },
-    { "id": "e10", "from": "pipelines", "to": "worker", "label": "mapeamento e marco de ativação" },
+    { "id": "e10", "from": "regras", "to": "worker", "label": "mapeamento e marco de ativação" },
     { "id": "e11", "from": "worker", "to": "ledger", "label": "estado e deduplicação" },
     { "id": "e12", "from": "cofre", "to": "worker", "label": "credencial da mesma organização" },
     { "id": "e13", "from": "worker", "to": "meta", "label": "envio com event_id estável" },

@@ -238,20 +238,9 @@ export const pipelineConfigPatchSchema = z.object({
     )
     .max(50)
     .optional(),
-  meta_conversion_rules: z
-    .record(
-      z.string().uuid(),
-      z.object({
-        event_name: z
-          .string()
-          .trim()
-          .min(1)
-          .max(40)
-          .regex(/^[A-Za-z][A-Za-z0-9_]*$/, "Use letras, numeros e underscore"),
-        requires_value: z.boolean().default(false),
-      }),
-    )
-    .optional(),
+  // Recusa o editor antigo (inclusive uma aba antiga ainda aberta), em vez de
+  // confirmar um salvamento que o consumidor oficial não utiliza.
+  meta_conversion_rules: z.never().optional(),
   qualification_policy: z
     .object({
       qualified_description: z.string().trim().max(4000),

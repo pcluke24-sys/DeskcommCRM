@@ -45,7 +45,9 @@ function valor(linha: Linha, caminho: string): unknown {
 
 function bancoFalso(tabelas: Record<string, Linha[]>) {
   const selects: string[] = [];
+  const consultas: string[] = [];
   const from = (tabela: string) => {
+    consultas.push(tabela);
     let linhas = [...(tabelas[tabela] ?? [])];
     let limite = Infinity;
     const chain = {
@@ -61,7 +63,7 @@ function bancoFalso(tabelas: Record<string, Linha[]>) {
     };
     return chain;
   };
-  return { auth: { getUser: async () => ({ data: { user: { id: "u-1" } }, error: null }) }, from, selects };
+  return { auth: { getUser: async () => ({ data: { user: { id: "u-1" } }, error: null }) }, from, selects, consultas };
 }
 
 describe("crm-summary: a etapa do negócio e as etapas do funil", () => {
@@ -73,6 +75,7 @@ describe("crm-summary: a etapa do negócio e as etapas do funil", () => {
           id: "l-1", organization_id: ORG, contact_id: CONTATO, title: "Pedido", status: "open",
           value_cents: null, currency: null, updated_at: "2026-09-26T12:00:00.000Z",
           pipeline_id: "p-1", stage_id: "s-dados", custom_fields: {},
+          source: "meta_ads", source_metadata: { utm_campaign: "campanha-teste" },
           crm_pipelines: {
             name: "Pedidos", settings: {}, is_archived: false,
             // Fora de ordem de propósito, e com uma arquivada no meio.
@@ -98,6 +101,8 @@ describe("crm-summary: a etapa do negócio e as etapas do funil", () => {
     expect(res.status).toBe(200);
     const [lead] = body.data.leads;
     expect(lead?.stage_id).toBe("s-dados");
+    expect(lead?.source).toBe("meta_ads");
+    expect(lead?.source_metadata).toEqual({ utm_campaign: "campanha-teste" });
     expect(lead?.etapas_do_funil).toEqual([
       { id: "s-dados", name: "Dados incompletos", is_won: false, is_lost: false },
       { id: "s-confirmado", name: "Pedido confirmado", is_won: false, is_lost: false },
@@ -106,6 +111,9 @@ describe("crm-summary: a etapa do negócio e as etapas do funil", () => {
     const select = banco.selects.join("|");
     expect(select).toContain("stage_id");
     expect(select).toContain("etapas:crm_stages!crm_stages_pipeline_id_fkey(id, name, position, is_won, is_lost, is_archived)");
+    // O embed já abastece o seletor oficial. A segunda leitura era sobra do
+    // seletor customizado removido na integração, e ainda podia derrubar tudo.
+    expect(banco.consultas).not.toContain("crm_stages");
   });
 });
 
