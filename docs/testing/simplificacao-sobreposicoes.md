@@ -31,3 +31,16 @@ A retirada integral do editor legado requer inventário das regras existentes, t
 ## Validação
 
 O teste de etapa verifica a ausência da segunda consulta, as etapas ativas ordenadas e a preservação da origem. Os resultados executados e as limitações devem acompanhar o checkpoint; não representa teste de produção.
+
+Executado em 25/10/2026, com banco local `127.0.0.1:55421`:
+
+- Recorte unitário: 7 arquivos, 284 casos aprovados (etapa no Inbox, enriquecimento/autorização, funil arquivado, campos, eventos oficiais da Meta, mapas e atribuição).
+- Controle negativo após checkpoint `33151310b`: reintroduzir uma leitura direta de `crm_stages` causa exatamente 1 falha e 5 aprovações no arquivo de etapa. Restaurado o código, os 6 casos passam.
+- Typecheck completo: exit 0.
+- ESLint completo: exit 0, 0 erros e 522 avisos no repositório; não representa lint sem avisos.
+- `lint-channels`: aprovado. Conferência de fragmentos: aprovada, sem escrever versão.
+- Build local de produção: aprovado; controle positivo confirma host local no bundle.
+- Playwright `etapa-pela-conversa.spec.ts`: 1 caso aprovado em 29,8 s. Abriu Inbox, moveu via bulk, conferiu atividade no banco e exigência de motivo de perda. Capturas sintéticas renovadas em `evidence/triagem-16set-l12/etapa-*.png`. Origem visível na captura `etapa-03-movido.png`.
+- Ambiente E2E registrou fallback local de rate limit por Redis indisponível; não foi prova de integração Redis nem de produção. Nenhuma mensagem externa foi enviada.
+
+Não executados: suíte unitária inteira, suíte completa de invariantes e CI remoto. Não houve alteração de schema/RLS, deploy, medição de consumo da VPS ou migração da configuração legada da Meta. A consolidação integral da Meta continua pendente.
