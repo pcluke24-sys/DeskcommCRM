@@ -69,7 +69,7 @@ import {
 } from "@/lib/conversoes/historico";
 import { FormularioDeCapturaDeUtm } from "./_formCapturaDeUtm";
 import { FormularioDeConversoes } from "./_form";
-import { EventosDoFunil, type FunilParaConversoes } from "./_funnel-events";
+import { CriteriosDoFunil, type FunilParaConversoes } from "./_funnel-events";
 import { FormularioDeConversoesGoogle } from "./_formGoogle";
 import { IdentidadeDaConversao } from "./_identidadeDaMeta";
 import { VendaPeloCanal } from "./_vendaPeloCanal";
@@ -377,7 +377,10 @@ export default async function ConversoesPage({
             />
           )}
           {(estado.conectada || vendaPeloCanal) && !etapas.error && regrasMeta && (
-            <RegrasDeConversaoMeta etapas={etapasAbertas} regras={regrasMeta} idioma={idioma} />
+            <RegrasDeConversaoMeta
+              etapas={etapasAbertas} regras={regrasMeta} idioma={idioma}
+              regrasAntigas={Object.fromEntries(funis.flatMap((f) => Object.entries(f.rules)))}
+            />
           )}
           <FormularioDeConversoesGoogle
             estado={estadoGoogle}
@@ -399,7 +402,7 @@ export default async function ConversoesPage({
               }
             />
           )}
-          <EventosDoFunil funis={funis} idioma={idioma} />
+          <CriteriosDoFunil funis={funis} idioma={idioma} />
 
           {slug && (
             <FormularioDeCapturaDeUtm

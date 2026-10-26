@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   EVENTOS_DA_META,
+  ehEventoDaMeta,
   eventoRecomendadoParaMeta,
   rotuloDoEventoDaMeta,
   type EventoDaMeta,
@@ -47,10 +48,12 @@ export function RegrasDeConversaoMeta({
   etapas,
   regras,
   idioma,
+  regrasAntigas = {},
 }: {
   etapas: EtapaAberta[];
   regras: RegraDeConversaoMeta[];
   idioma: Idioma;
+  regrasAntigas?: Record<string, { event_name?: unknown; requires_value?: unknown }>;
 }) {
   const t = (texto: string) => traduzir(texto, idioma);
   const router = useRouter();
@@ -71,6 +74,33 @@ export function RegrasDeConversaoMeta({
 
   const [rascunhos, setRascunhos] = useState(inicial);
   const ligadas = etapas.filter((e) => rascunhos[e.id]?.enabled).length;
+  // Só nomes idênticos, sem exigência de valor. Uma regra oficial existente
+  // (inclusive desligada) sempre prevalece; não reativar escolha anterior.
+  const compativeis = etapas.flatMap((e) => {
+    const antiga = regrasAntigas[e.id];
+    if (
+      regras.some((r) => r.stageId === e.id) ||
+      !antiga ||
+      antiga.requires_value === true ||
+      !ehEventoDaMeta(antiga.event_name)
+    )
+      return [];
+    return [{ stageId: e.id, evento: antiga.event_name }];
+  });
+
+  function aproveitarAntigas() {
+    setRascunhos((atual) => {
+      const novo = { ...atual };
+      for (const regra of compativeis)
+        novo[regra.stageId] = { enabled: true, metaEvent: regra.evento };
+      return novo;
+    });
+    toast.message(
+      t(
+        "Regras antigas compatíveis carregadas como rascunho. Confira e salve. Nenhum envio foi ativado.",
+      ),
+    );
+  }
 
   function mudar(id: string, parcial: Partial<Rascunho>) {
     setRascunhos((atual) => ({ ...atual, [id]: { ...atual[id]!, ...parcial } }));
@@ -127,11 +157,16 @@ export function RegrasDeConversaoMeta({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground" data-testid="etapas-meta-enviando">
-            {ligadas} {t("de")} {etapas.length} {t("etapas enviando")}
+            {ligadas} {t("de")} {etapas.length} {t("etapas selecionadas — confira e salve")}
           </span>
           <Button type="button" variant="outline" onClick={usarRecomendado}>
             {t("Usar o recomendado")}
           </Button>
+          {compativeis.length > 0 && (
+            <Button type="button" variant="outline" onClick={aproveitarAntigas}>
+              {t("Aproveitar regras antigas compatíveis")}
+            </Button>
+          )}
         </div>
       </div>
 

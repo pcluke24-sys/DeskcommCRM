@@ -43,4 +43,27 @@ Executado em 25/10/2026, com banco local `127.0.0.1:55421`:
 - Playwright `etapa-pela-conversa.spec.ts`: 1 caso aprovado em 29,8 s. Abriu Inbox, moveu via bulk, conferiu atividade no banco e exigência de motivo de perda. Capturas sintéticas renovadas em `evidence/triagem-16set-l12/etapa-*.png`. Origem visível na captura `etapa-03-movido.png`.
 - Ambiente E2E registrou fallback local de rate limit por Redis indisponível; não foi prova de integração Redis nem de produção. Nenhuma mensagem externa foi enviada.
 
-Não executados: suíte unitária inteira, suíte completa de invariantes e CI remoto. Não houve alteração de schema/RLS, deploy, medição de consumo da VPS ou migração da configuração legada da Meta. A consolidação integral da Meta continua pendente.
+Não executados nesta primeira etapa: suíte unitária inteira, suíte completa de invariantes e CI remoto. Não houve alteração de schema/RLS, deploy ou medição de consumo da VPS.
+
+## Segunda etapa — editor único (26/10/2026)
+
+Autorização do usuário: usar somente eventos oficiais. Nenhuma publicação ou implantação autorizada nesta etapa.
+
+Inventário de produção somente leitura em 26/10/2026 13:07 BRT (`begin read only`, limite de 6 s por consulta):
+
+- 4 funis; 3 com regras antigas, totalizando 13 regras. Nenhum critério de qualificação preenchido.
+- 3 `Contact`, 3 `QualifiedLead`, 3 `Schedule`, 3 `Purchase` em etapas de ganho e 1 `DisqualifiedLead` em perda.
+- Nenhuma regra em `meta_ads_conversion_rules`.
+- Livro-razão: 1 compra Meta `sent`, 7 compras `skipped` e 1 erro de cada `Contact`, `QualifiedLead` e `Schedule`. Não é confirmação de todas as tentativas históricas nem de entrega de mensagens.
+
+Decisão implementada localmente:
+
+- O editor antigo não grava mais mapas que o consumidor atual ignora. Uma aba antiga recebe `validation_failed`, em vez de falso sucesso.
+- Regras e marco antigos ficam preservados nos settings e visíveis somente para consulta; critérios continuam editáveis separadamente.
+- O editor oficial é o único caminho de gravação. O aproveitamento de regras antigas é apenas um rascunho por gesto humano: somente nome oficial idêntico, sem exigência de valor, etapa aberta e sem regra oficial anterior. Regra desligada explicitamente não é reativada.
+- `Contact`, `Schedule`, `DisqualifiedLead` e nomes livres não são traduzidos por suposição. A equipe revisa substitutos no editor oficial e salva. Nenhum backfill, envio ou ativação automática.
+- Nenhuma mudança no consumidor, credencial, ledger ou chave de `Purchase`: a compra enviada não é migrada nem reaberta. O reaproveitamento não faz requisições de envio.
+
+Checklist complementar: entrada = settings do funil autorizado; saída = rascunho no editor oficial e `salvarRegrasDeConversaoMeta`; auditoria existente dessa ação permanece; superfície = Configurações > Conversões; falha = toast sem falso sucesso; anti-morte = retries oficiais sem alteração; continuidade = critérios para `suggestQualification` mantidos; retorno = avisos na tela e Histórico oficiais; mapa `eventos-meta-funil.architecture.json` atualizado. Núcleo, sem novo módulo ou dependência paga.
+
+Validação da segunda etapa: em execução; resultados finais devem ser registrados antes de declarar prontidão. Produção permanece intocada.
