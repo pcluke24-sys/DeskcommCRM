@@ -445,6 +445,8 @@ describe("o evento de ETAPA da Meta também sai pelo canal", () => {
   });
 
   it("com a conexão direta ligada, a etapa segue por ela — e o canal não é chamado", async () => {
+    // O transporte recusa eventos acima de sete dias; este caso mede o caminho direto.
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse(ENTROU_NA_ETAPA) + 60_000);
     vi.mocked(createAdminClient).mockReturnValue(
       fakeAdmin({ sessao: CANAL_COM_PONTE, conexao: "ligada", extras: regraDaEtapa() }) as never,
     );
