@@ -61,7 +61,7 @@ describe("busca zera para pessoal (critério 2: nome, telefone e prévia)", () =
 describe("contagem cai junto com a lista (critério 3)", () => {
   it("toda contagem nasce com a mesma exclusão", () => {
     expect(CONTAS).toMatch(/idsDeContatosPessoais/);
-    expect(CONTAS).toMatch(/\.not\("contact_id",\s*"in"/);
+    expect(CONTAS).toMatch(/p_excluded_contacts:\s*pessoais/);
   });
 });
 

@@ -180,7 +180,9 @@ describe("contador de Minhas", () => {
     const fonte = readFileSync("app/api/v1/conversations/counts/route.ts", "utf8");
 
     expect(fonte).toContain("CONVERSATION_TERMINAL_STATUSES");
-    expect(fonte).toMatch(/assigned_to_user_id[\s\S]{0,200}not\(\s*"status"\s*,\s*"in"/);
+    expect(fonte).toContain("p_terminal_statuses: [...CONVERSATION_TERMINAL_STATUSES]");
+    const sql = readFileSync("supabase/migrations/20261105050000_0900_inbox_contagens_escopo_por_consulta.sql", "utf8");
+    expect(sql).toContain("assigned_to_user_id = (select auth.uid()) and status <> all(p_terminal_statuses)");
   });
 });
 

@@ -28,22 +28,6 @@ import { tabToFilter } from "@/components/inbox/InboxLayout";
 const raiz = process.cwd();
 const fonte = (rel: string) => readFileSync(join(raiz, rel), "utf8");
 
-/**
- * Bloco de um `case` de switch: do rótulo até o próximo `case`/fim do bloco.
- */
-function blocoDoCase(arquivo: string, rotulo: string): string {
-  const texto = fonte(arquivo);
-  const inicio = texto.indexOf(`case "${rotulo}":`);
-  expect(inicio, `case "${rotulo}" não encontrado em ${arquivo}`).toBeGreaterThan(-1);
-  const resto = texto.slice(inicio + 1);
-  const fim = resto.search(/\n\s*(case |default:)/);
-  return fim === -1 ? resto : resto.slice(0, fim);
-}
-
-/** Código do bloco, sem comentários: é o código que decide, não a explicação. */
-const semComentarios = (codigo: string) =>
-  codigo.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-
 describe("aba Arquivadas — filtro da lista", () => {
   // Estes dois casos eram medidos por TEXTO-FONTE do bloco do `case`, com a
   // função exportada ao lado. Isso falha nos dois sentidos: mover a decisão para
@@ -95,14 +79,15 @@ describe("aba Arquivadas — rótulo e badge", () => {
 
 describe("contagem de arquivadas", () => {
   it("a rota counts filtra archived separadamente de closed", () => {
-    const rota = fonte("app/api/v1/conversations/counts/route.ts");
-    expect(rota).toMatch(/\.eq\("status",\s*"archived"\)/);
-    expect(rota).toMatch(/\.eq\("status",\s*"closed"\)/);
+    const sql = fonte("supabase/migrations/20261105050000_0900_inbox_contagens_escopo_por_consulta.sql");
+    expect(sql).toContain("'archived', count(*) filter (where status = 'archived')");
+    expect(sql).toContain("'closed', count(*) filter (where status = 'closed')");
   });
 
   it("devolve a chave archived no corpo", () => {
     const rota = fonte("app/api/v1/conversations/counts/route.ts");
-    expect(rota).toMatch(/archived:\s*archived\.count/);
+    expect(rota).toContain('supabase.rpc("fn_inbox_counts"');
+    expect(rota).toContain("return ok(data,");
   });
 });
 

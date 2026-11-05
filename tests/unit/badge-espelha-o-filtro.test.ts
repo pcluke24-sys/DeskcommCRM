@@ -130,7 +130,7 @@ describe("o marcador da contagem é o da lista — uma régua só", () => {
     // de uma etiqueta só. Se a cerca aceitasse as duas, uma rota que voltasse
     // ao singular passaria aqui e perderia o E/OU — que é o filtro inteiro.
     const src = readFileSync(caminho, "utf8");
-    expect(src).toContain("aplicarMarcadores(");
+    expect(src).toContain(caminho === CONTAGEM ? "marcadoresEscolhidos(" : "aplicarMarcadores(");
     expect(
       src,
       "a rota voltou ao caminho singular — o filtro de VÁRIAS etiquetas (E/OU) seria ignorado",
@@ -157,62 +157,16 @@ describe("o marcador da contagem é o da lista — uma régua só", () => {
   });
 });
 
-/**
- * ⭐ A GUARDA QUE TORNA A SABOTAGEM POSSÍVEL.
- *
- * Os filtros são aplicados DENTRO de `countExact()`, então toda contagem os herda
- * por construção. Isso é melhor que um teste — mas some no dia em que alguém
- * montar uma contagem por fora da fábrica, que é a única forma de o defeito
- * voltar. É isso que este caso vigia.
- */
-describe("nenhuma contagem é montada por fora da fábrica", () => {
-  const fonte = readFileSync("app/api/v1/conversations/counts/route.ts", "utf8");
-
-  it("toda contagem sai de `countExact()`", () => {
-    const dentroDoPromiseAll = fonte.slice(
-      fonte.indexOf("await Promise.all(["),
-      fonte.indexOf("]);", fonte.indexOf("await Promise.all([")),
-    );
-    expect(dentroDoPromiseAll).not.toBe("");
-    const linhasDeContagem = dentroDoPromiseAll
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("supabase") || l.includes('.from("conversations")'));
-    expect(
-      linhasDeContagem,
-      "contagem montada direto no supabase, por fora de countExact() — ela não herda nem a organização nem os filtros",
-    ).toEqual([]);
+describe("toda contagem usa a agregação sob RLS", () => {
+  const fonte = readFileSync(CONTAGEM, "utf8");
+  it("usa uma RPC e não abre contagens paralelas por fora", () => {
+    expect(fonte).toContain('supabase.rpc("fn_inbox_counts"');
+    expect(fonte).not.toContain("countExact");
+    expect(fonte).not.toContain("createAdminClient");
   });
-
-  it("a fábrica aplica os auxiliares E o não-lidas", () => {
-    const fabrica = fonte.slice(
-      fonte.indexOf("const countExact = () =>"),
-      fonte.indexOf("await Promise.all(["),
-    );
-    expect(fabrica).toContain("organization_id");
-    expect(fabrica, "os filtros auxiliares não entram na fábrica").toContain("auxiliares");
-    expect(fabrica, "o filtro de não lidas não entra na fábrica").toContain("soNaoLidas");
-  });
-
-  it("a fábrica aplica a régua do marcador (#1223)", () => {
-    // O defeito morava aqui: a fábrica pedia `.eq("tag", valor)`. Sem esta linha,
-    // a contagem ignora o marcador em silêncio — e o badge passa a contar o que a
-    // aba não mostra, que é o defeito que este arquivo existe para pegar.
-    const fabrica = fonte.slice(
-      fonte.indexOf("const countExact = () =>"),
-      fonte.indexOf("await Promise.all(["),
-    );
-    expect(fabrica, "o marcador não entra na fábrica").toContain("aplicarMarcadores(");
-  });
-
-  it("a aba Fechadas TEM contagem — o concorrente mostra 8067 e nós mostrávamos nada", () => {
-    expect(fonte).toContain("closed: closed.count");
-  });
-
-  it("o comentário não cita arquivo de teste que não existe", () => {
-    // A linha 69 citava `tests/unit/badge-espelha-a-aba.test.ts`, que NUNCA existiu
-    // — medido com `find` e com `git log`. Citação falsa dentro do código é pior
-    // que comentário nenhum: quem confia nela não procura o gate de verdade.
-    expect(fonte).not.toContain("badge-espelha-a-aba");
+  it("encaminha organização, auxiliares, não lidas e etiquetas", () => {
+    for (const parametro of ["p_organization_id: org", "p_channel_session_id:", "p_unread: soNaoLidas", "p_tags: marcadoresEscolhidos(marcadores)", "p_tag_mode: modo"]) {
+      expect(fonte).toContain(parametro);
+    }
   });
 });
