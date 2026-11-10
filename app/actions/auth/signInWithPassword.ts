@@ -104,5 +104,20 @@ export async function signInWithPassword(input: LoginInput, next?: string): Prom
   });
 
   // Server-side redirect ensures fresh session cookie is sent to browser.
-  redirect(safeNext(next, data.user.user_metadata?.invite_token ? "/auth/complete-invite" : "/app"));
+  let destino = "/app";
+  if (data.user.user_metadata?.invite_token) {
+    // Metadado de convite não prova que ainda falta vínculo. Usuários já
+    // vinculados entram direto, sem redirecionar a action a um Route Handler.
+    const { data: vinculo, error: erroVinculo } = await supabase
+      .from("user_organizations")
+      .select("organization_id")
+      .eq("user_id", data.user.id)
+      .is("revoked_at", null)
+      .limit(1)
+      .maybeSingle();
+    if (erroVinculo) redirect("/503");
+    if (!vinculo) destino = "/auth/complete-invite";
+  }
+  const solicitado = safeNext(next, destino);
+  redirect(destino === "/app" && solicitado === "/auth/complete-invite" ? "/app" : solicitado);
 }
