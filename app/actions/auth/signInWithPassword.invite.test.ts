@@ -61,3 +61,9 @@ it("next antigo não devolve membro ao convite", async () => {
   setup(true, { organization_id: "org" });
   await expect(signInWithPassword(input, "/auth/complete-invite")).rejects.toThrow("REDIRECT:/app");
 });
+it("next externo não desvia a sessão para outro domínio", async () => {
+  setup(true, { organization_id: "org" });
+  await expect(signInWithPassword(input, "https://outside.invalid")).rejects.toThrow(
+    "REDIRECT:/app",
+  );
+});
